@@ -220,8 +220,8 @@ export default function AccountPage() {
   };
 
   const handleLogout = async () => {
+    // logout() already handles navigation
     await logout();
-    router.push('/login');
   };
 
   const hasUnsavedPhoto = selectedFile !== null;

@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
@@ -40,34 +40,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  const refreshUser = async () => {
+  const refreshUser = useCallback(async () => {
     try {
-      const { data: { user: supabaseUser } } = await supabase.auth.getUser();
-      setUser(mapSupabaseUser(supabaseUser));
+      // Use getSession first (faster, cached) then getUser for fresh data
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setUser(mapSupabaseUser(session.user));
+        setLoading(false);
+        // Optionally refresh with getUser in background for freshest data
+        supabase.auth.getUser().then(({ data }) => {
+          if (data.user) {
+            setUser(mapSupabaseUser(data.user));
+          }
+        });
+      } else {
+        setUser(null);
+        setLoading(false);
+      }
     } catch {
       setUser(null);
-    } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
+    // Initial load - use session for speed
     refreshUser();
 
     // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session?.user) {
+      console.log('Auth state changed:', event);
+      if (event === 'SIGNED_OUT') {
+        setUser(null);
+        setLoading(false);
+      } else if (session?.user) {
         setUser(mapSupabaseUser(session.user));
+        setLoading(false);
       } else {
         setUser(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => {
       subscription.unsubscribe();
     };
-  }, []);
+  }, [refreshUser]);
 
   const login = async (identifier: string, password: string) => {
     try {
@@ -123,20 +141,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
+    console.log('Logout called');
+    // Clear state immediately
+    setUser(null);
+    setLoading(false);
+    
     try {
-      setUser(null);
-      await supabase.auth.signOut({ scope: 'local' });
-      // Clear any cached state
-      router.push('/login');
-      router.refresh();
+      // Sign out from Supabase (global scope to clear all sessions)
+      const { error } = await supabase.auth.signOut({ scope: 'global' });
+      if (error) {
+        console.error('Supabase signOut error:', error);
+      }
     } catch (error) {
       console.error('Logout error:', error);
-      // Still clear user state even if signOut fails
-      setUser(null);
-      router.push('/login');
     }
-  };
+    
+    // Navigate to login
+    router.push('/login');
+    router.refresh();
+  }, [router]);
 
   return (
     <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUser }}>
