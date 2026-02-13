@@ -33,6 +33,8 @@ export default function StationPage({ params }: StationPageProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [isAddingTrack, setIsAddingTrack] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [streamCopied, setStreamCopied] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [station, setStation] = useState<{
     id: string
     name: string
@@ -53,19 +55,25 @@ export default function StationPage({ params }: StationPageProps) {
   } = usePlayerStore()
   
   useEffect(() => {
-    // In production, fetch station data from API
-    // For demo, we'll use mock data
-    const mockStation = {
-      id,
-      name: 'Demo Radio Station',
-      description: 'A demo station to showcase FilthyStream capabilities',
-      imageUrl: null,
-      isLive: false,
-      listenKey: 'demo-listen-key'
+    const fetchStation = async () => {
+      try {
+        const response = await fetch(`/api/stations/${id}`)
+        if (!response.ok) {
+          throw new Error('Station not found')
+        }
+        const data = await response.json()
+        setStation(data.station)
+        setCurrentStationId(id)
+        setError(null)
+      } catch (err) {
+        setError('Failed to load station')
+        console.error('Error fetching station:', err)
+      } finally {
+        setIsLoading(false)
+      }
     }
-    setStation(mockStation)
-    setCurrentStationId(id)
-    setIsLoading(false)
+    
+    fetchStation()
     
     // Cleanup on unmount
     return () => {
@@ -145,12 +153,34 @@ export default function StationPage({ params }: StationPageProps) {
     setTimeout(() => setCopied(false), 2000)
   }
   
+  const handleCopyStreamUrl = () => {
+    const streamUrl = `${window.location.origin}/api/stream/${station?.listenKey}`
+    navigator.clipboard.writeText(streamUrl)
+    setStreamCopied(true)
+    setTimeout(() => setStreamCopied(false), 2000)
+  }
+  
   const pendingTracks = queue.filter(item => item.status === 'PENDING')
   
   if (isLoading) {
     return (
       <div className="min-h-screen bg-[var(--background)] flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
+      </div>
+    )
+  }
+  
+  if (error || !station) {
+    return (
+      <div className="min-h-screen bg-[var(--background)] flex flex-col items-center justify-center gap-4">
+        <Radio className="w-16 h-16 text-gray-500" />
+        <p className="text-xl text-gray-400">{error || 'Station not found'}</p>
+        <Link
+          href="/stations"
+          className="px-4 py-2 bg-purple-500 rounded-lg hover:bg-purple-600 transition-colors"
+        >
+          Browse Stations
+        </Link>
       </div>
     )
   }
@@ -274,6 +304,38 @@ export default function StationPage({ params }: StationPageProps) {
                     0 listeners
                   </span>
                 </div>
+              </div>
+            </div>
+            
+            {/* Stream URL */}
+            <div className="bg-[var(--card-bg)] border border-[var(--border)] rounded-2xl p-6 mb-8">
+              <div className="flex items-center gap-2 mb-3">
+                <Radio className="w-5 h-5 text-purple-400" />
+                <h2 className="text-lg font-bold">Radio Stream URL</h2>
+              </div>
+              <p className="text-gray-400 text-sm mb-4">
+                Share this link so others can listen to your station. This URL is always active!
+              </p>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 bg-black/30 border border-[var(--border)] rounded-lg px-4 py-3 font-mono text-sm text-gray-300 truncate">
+                  {window.location.origin}/listen/{station.listenKey}
+                </div>
+                <button
+                  onClick={handleCopyStreamUrl}
+                  className="flex items-center gap-2 px-4 py-3 bg-purple-500 hover:bg-purple-600 rounded-lg font-medium transition-colors"
+                >
+                  {streamCopied ? (
+                    <>
+                      <Check className="w-4 h-4" />
+                      Copied!
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4" />
+                      Copy
+                    </>
+                  )}
+                </button>
               </div>
             </div>
             
