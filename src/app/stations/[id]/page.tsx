@@ -256,7 +256,7 @@ export default function StationPage({ params }: StationPageProps) {
   }
   
   const handleCopyStreamUrl = () => {
-    const streamUrl = `${window.location.origin}/listen/${station?.listenKey}`
+    const streamUrl = `${window.location.origin}/api/stream/${station?.listenKey}`
     navigator.clipboard.writeText(streamUrl)
     setStreamCopied(true)
     setTimeout(() => setStreamCopied(false), 2000)
@@ -435,17 +435,41 @@ export default function StationPage({ params }: StationPageProps) {
                 <h2 className="text-lg font-bold">Radio Stream URL</h2>
               </div>
               <p className="text-gray-400 text-sm mb-4">
-                Share this link so others can listen to your station. This URL is always active!
+                Direct audio stream URL — works in VLC, car radios, and any audio player.
               </p>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 mb-4">
                 <div className="flex-1 bg-black/30 border border-[var(--border)] rounded-lg px-4 py-3 font-mono text-sm text-gray-300 truncate">
-                  {window.location.origin}/listen/{station.listenKey}
+                  {window.location.origin}/api/stream/{station.listenKey}
                 </div>
                 <button
                   onClick={handleCopyStreamUrl}
                   className="flex items-center gap-2 px-4 py-3 bg-purple-500 hover:bg-purple-600 rounded-lg font-medium transition-colors"
                 >
                   {streamCopied ? (
+                    <>
+                      <Check className="w-4 h-4" />
+                      Copied!
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4" />
+                      Copy
+                    </>
+                  )}
+                </button>
+              </div>
+              <p className="text-gray-400 text-sm mb-2">
+                Web player link — share with listeners for the full experience.
+              </p>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 bg-black/30 border border-[var(--border)] rounded-lg px-4 py-3 font-mono text-sm text-gray-300 truncate">
+                  {window.location.origin}/listen/{station.listenKey}
+                </div>
+                <button
+                  onClick={handleCopyLink}
+                  className="flex items-center gap-2 px-4 py-3 bg-white/10 hover:bg-white/20 rounded-lg font-medium transition-colors"
+                >
+                  {copied ? (
                     <>
                       <Check className="w-4 h-4" />
                       Copied!
