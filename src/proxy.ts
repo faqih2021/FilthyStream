@@ -1,22 +1,25 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-// Public routes that don't require authentication
-const publicRoutes = ['/login', '/register', '/forgot-password', '/reset-password'];
+// Public page routes that don't require authentication
+const publicRoutes = ['/login', '/register', '/forgot-password', '/reset-password', '/listen'];
 
 // API routes that don't require authentication
-const publicApiRoutes = ['/api/auth/login', '/api/auth/register'];
+const publicApiRoutes = ['/api/auth/login', '/api/auth/register', '/api/listen', '/api/stream'];
+
+// The home page and stations browse are also public
+const publicExactRoutes = ['/', '/stations'];
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   
-  // Check if it's a public route
+  // Check if it's a public page route
   if (publicRoutes.some(route => pathname.startsWith(route))) {
-    // If user is already logged in, redirect to home
-    const token = request.cookies.get('sb-access-token')?.value;
-    if (token) {
-      return NextResponse.redirect(new URL('/', request.url));
-    }
+    return NextResponse.next();
+  }
+
+  // Check exact public routes
+  if (publicExactRoutes.includes(pathname)) {
     return NextResponse.next();
   }
 

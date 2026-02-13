@@ -5,6 +5,8 @@ import { getStationPlayState, advanceToNextTrack } from '@/lib/stream-manager'
 
 // Disable body parsing for streaming
 export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+export const maxDuration = 300 // 5 minutes max (Vercel Pro)
 
 /**
  * Audio streaming endpoint
@@ -141,7 +143,6 @@ export async function GET(
       status: 200,
       headers: {
         'Content-Type': mimeType,
-        'Transfer-Encoding': 'chunked',
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Connection': 'keep-alive',
         'Access-Control-Allow-Origin': '*',

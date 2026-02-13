@@ -15,16 +15,18 @@ interface StationPlayState {
   currentTrackDuration: number | null  // seconds
 }
 
-// In-memory store of active station states
+// In-memory cache of active station states (best-effort on serverless)
+// On Vercel, this may be empty on cold starts - we always fall back to DB
 const stationStates = new Map<string, StationPlayState>()
 
 /**
- * Get or initialize the playback state for a station
+ * Get or initialize the playback state for a station.
+ * Always validates against database - in-memory cache is just optimization.
  */
 export async function getStationPlayState(stationId: string): Promise<StationPlayState | null> {
   // Check in-memory cache first
   const cached = stationStates.get(stationId)
-  if (cached) {
+  if (cached && cached.currentTrackSourceId) {
     // Check if current track has ended
     if (cached.currentTrackStartedAt && cached.currentTrackDuration) {
       const elapsed = (Date.now() - cached.currentTrackStartedAt) / 1000
@@ -36,7 +38,7 @@ export async function getStationPlayState(stationId: string): Promise<StationPla
     return cached
   }
 
-  // Load from database
+  // Load from database (cold start or cache miss)
   return await loadStationState(stationId)
 }
 
