@@ -1,0 +1,248 @@
+<!-- =============================================
+     FilthyStream Email Templates for Supabase
+     Copy paste ke Supabase Dashboard > Authentication > Email Templates
+     ============================================= -->
+
+<!-- =============================================
+     1. CONFIRM SIGNUP EMAIL
+     Paste ke: Authentication > Email Templates > Confirm signup
+     ============================================= -->
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Confirm your FilthyStream account</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0a0a0a;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #0a0a0a; padding: 40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 500px; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-radius: 16px; overflow: hidden; box-shadow: 0 20px 60px rgba(138, 43, 226, 0.3);">
+          <!-- Header -->
+          <tr>
+            <td style="padding: 40px 40px 20px; text-align: center; background: linear-gradient(90deg, #8b5cf6 0%, #ec4899 100%);">
+              <h1 style="margin: 0; font-size: 32px; font-weight: 800; color: #ffffff; letter-spacing: -1px;">
+                🎵 FilthyStream
+              </h1>
+              <p style="margin: 8px 0 0; font-size: 14px; color: rgba(255,255,255,0.9);">
+                Your Radio, Your Rules
+              </p>
+            </td>
+          </tr>
+          
+          <!-- Content -->
+          <tr>
+            <td style="padding: 40px;">
+              <h2 style="margin: 0 0 16px; font-size: 24px; font-weight: 700; color: #ffffff;">
+                Welcome to the Stream! 🎧
+              </h2>
+              <p style="margin: 0 0 24px; font-size: 16px; line-height: 1.6; color: #a1a1aa;">
+                Thanks for signing up! You're just one click away from creating your own radio stations and streaming your favorite music from Spotify and YouTube.
+              </p>
+              
+              <!-- Button -->
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center" style="padding: 8px 0 24px;">
+                    <a href="{{ .ConfirmationURL }}" style="display: inline-block; padding: 16px 48px; background: linear-gradient(90deg, #8b5cf6 0%, #ec4899 100%); color: #ffffff; font-size: 16px; font-weight: 700; text-decoration: none; border-radius: 50px; box-shadow: 0 8px 24px rgba(139, 92, 246, 0.4);">
+                      ✨ Confirm My Email
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              
+              <p style="margin: 0 0 8px; font-size: 14px; color: #71717a;">
+                Or copy and paste this link into your browser:
+              </p>
+              <p style="margin: 0; font-size: 12px; word-break: break-all; color: #8b5cf6;">
+                {{ .ConfirmationURL }}
+              </p>
+            </td>
+          </tr>
+          
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 24px 40px; background-color: rgba(0,0,0,0.3); border-top: 1px solid rgba(255,255,255,0.1);">
+              <p style="margin: 0; font-size: 12px; color: #71717a; text-align: center;">
+                If you didn't create an account with FilthyStream, you can safely ignore this email.
+              </p>
+              <p style="margin: 12px 0 0; font-size: 12px; color: #52525b; text-align: center;">
+                © 2026 FilthyStream. Stream responsibly. 🎶
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+
+
+<!-- =============================================
+     2. RESET PASSWORD EMAIL
+     Paste ke: Authentication > Email Templates > Reset Password
+     ============================================= -->
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reset your FilthyStream password</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0a0a0a;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #0a0a0a; padding: 40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 500px; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-radius: 16px; overflow: hidden; box-shadow: 0 20px 60px rgba(239, 68, 68, 0.2);">
+          <!-- Header -->
+          <tr>
+            <td style="padding: 40px 40px 20px; text-align: center; background: linear-gradient(90deg, #ef4444 0%, #f97316 100%);">
+              <h1 style="margin: 0; font-size: 32px; font-weight: 800; color: #ffffff; letter-spacing: -1px;">
+                🎵 FilthyStream
+              </h1>
+              <p style="margin: 8px 0 0; font-size: 14px; color: rgba(255,255,255,0.9);">
+                Password Reset Request
+              </p>
+            </td>
+          </tr>
+          
+          <!-- Content -->
+          <tr>
+            <td style="padding: 40px;">
+              <h2 style="margin: 0 0 16px; font-size: 24px; font-weight: 700; color: #ffffff;">
+                Forgot your password? 🔐
+              </h2>
+              <p style="margin: 0 0 24px; font-size: 16px; line-height: 1.6; color: #a1a1aa;">
+                No worries! It happens to the best of us. Click the button below to reset your password and get back to streaming.
+              </p>
+              
+              <!-- Button -->
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center" style="padding: 8px 0 24px;">
+                    <a href="{{ .ConfirmationURL }}" style="display: inline-block; padding: 16px 48px; background: linear-gradient(90deg, #ef4444 0%, #f97316 100%); color: #ffffff; font-size: 16px; font-weight: 700; text-decoration: none; border-radius: 50px; box-shadow: 0 8px 24px rgba(239, 68, 68, 0.4);">
+                      🔑 Reset My Password
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              
+              <p style="margin: 0 0 8px; font-size: 14px; color: #71717a;">
+                Or copy and paste this link into your browser:
+              </p>
+              <p style="margin: 0; font-size: 12px; word-break: break-all; color: #f97316;">
+                {{ .ConfirmationURL }}
+              </p>
+              
+              <!-- Warning -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-top: 24px;">
+                <tr>
+                  <td style="padding: 16px; background-color: rgba(239, 68, 68, 0.1); border-radius: 8px; border-left: 4px solid #ef4444;">
+                    <p style="margin: 0; font-size: 13px; color: #fca5a5;">
+                      ⚠️ This link will expire in 1 hour. If you didn't request a password reset, please ignore this email or contact support.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 24px 40px; background-color: rgba(0,0,0,0.3); border-top: 1px solid rgba(255,255,255,0.1);">
+              <p style="margin: 0; font-size: 12px; color: #71717a; text-align: center;">
+                This is an automated email. Please do not reply directly to this message.
+              </p>
+              <p style="margin: 12px 0 0; font-size: 12px; color: #52525b; text-align: center;">
+                © 2026 FilthyStream. Keep your account secure. 🔒
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+
+
+<!-- =============================================
+     3. MAGIC LINK EMAIL (optional bonus)
+     Paste ke: Authentication > Email Templates > Magic Link
+     ============================================= -->
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Your FilthyStream login link</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0a0a0a;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #0a0a0a; padding: 40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 500px; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-radius: 16px; overflow: hidden; box-shadow: 0 20px 60px rgba(34, 197, 94, 0.2);">
+          <!-- Header -->
+          <tr>
+            <td style="padding: 40px 40px 20px; text-align: center; background: linear-gradient(90deg, #22c55e 0%, #14b8a6 100%);">
+              <h1 style="margin: 0; font-size: 32px; font-weight: 800; color: #ffffff; letter-spacing: -1px;">
+                🎵 FilthyStream
+              </h1>
+              <p style="margin: 8px 0 0; font-size: 14px; color: rgba(255,255,255,0.9);">
+                Magic Login Link
+              </p>
+            </td>
+          </tr>
+          
+          <!-- Content -->
+          <tr>
+            <td style="padding: 40px;">
+              <h2 style="margin: 0 0 16px; font-size: 24px; font-weight: 700; color: #ffffff;">
+                Login with one click! ✨
+              </h2>
+              <p style="margin: 0 0 24px; font-size: 16px; line-height: 1.6; color: #a1a1aa;">
+                Click the button below to instantly log in to your FilthyStream account. No password needed!
+              </p>
+              
+              <!-- Button -->
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center" style="padding: 8px 0 24px;">
+                    <a href="{{ .ConfirmationURL }}" style="display: inline-block; padding: 16px 48px; background: linear-gradient(90deg, #22c55e 0%, #14b8a6 100%); color: #ffffff; font-size: 16px; font-weight: 700; text-decoration: none; border-radius: 50px; box-shadow: 0 8px 24px rgba(34, 197, 94, 0.4);">
+                      🚀 Log Me In
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              
+              <p style="margin: 0 0 8px; font-size: 14px; color: #71717a;">
+                Or copy and paste this link into your browser:
+              </p>
+              <p style="margin: 0; font-size: 12px; word-break: break-all; color: #22c55e;">
+                {{ .ConfirmationURL }}
+              </p>
+            </td>
+          </tr>
+          
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 24px 40px; background-color: rgba(0,0,0,0.3); border-top: 1px solid rgba(255,255,255,0.1);">
+              <p style="margin: 0; font-size: 12px; color: #71717a; text-align: center;">
+                This link expires in 1 hour. If you didn't request this, you can safely ignore it.
+              </p>
+              <p style="margin: 12px 0 0; font-size: 12px; color: #52525b; text-align: center;">
+                © 2026 FilthyStream. Magic at your fingertips. ✨
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

@@ -1,0 +1,146 @@
+// FilthyStream - Radio Streaming Platform
+// Database schema for PostgreSQL
+// NOTE: Authentication ditangani oleh Supabase Auth (auth.users)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Radio Station
+model Station {
+  id            String   @id @default(uuid()) @db.Uuid
+  name          String   @db.VarChar(100)
+  description   String?  @db.Text
+  imageUrl      String?  @map("image_url") @db.Text
+  isLive        Boolean  @default(false) @map("is_live")
+  isPublic      Boolean  @default(true) @map("is_public")
+  listenKey     String   @unique @default(uuid()) @map("listen_key") @db.Uuid
+  playCount     Int      @default(0) @map("play_count")
+  listenerCount Int      @default(0) @map("listener_count")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Owner - references auth.users from Supabase Auth
+  userId      String   @map("user_id") @db.Uuid
+
+  // Relations
+  queue       QueueItem[]
+  history     PlayHistory[]
+
+  @@index([userId])
+  @@index([listenKey])
+  @@index([playCount(sort: Desc)])
+  @@map("stations")
+}
+
+// Playlist - collection of tracks
+model Playlist {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @db.VarChar(100)
+  description String?  @db.Text
+  imageUrl    String?  @map("image_url") @db.Text
+  isPublic    Boolean  @default(false) @map("is_public")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Owner - references auth.users from Supabase Auth
+  userId      String   @map("user_id") @db.Uuid
+
+  // Relations
+  tracks      PlaylistTrack[]
+
+  @@index([userId])
+  @@map("playlists")
+}
+
+// Track - individual song/audio
+model Track {
+  id          String      @id @default(uuid()) @db.Uuid
+  title       String      @db.VarChar(255)
+  artist      String?     @db.VarChar(255)
+  album       String?     @db.VarChar(255)
+  duration    Int?        // Duration in seconds
+  imageUrl    String?     @map("image_url") @db.Text
+  sourceType  SourceType  @map("source_type")
+  sourceId    String      @map("source_id") @db.VarChar(255) // Spotify track ID or YouTube video ID
+  sourceUrl   String      @map("source_url") @db.Text // Original URL
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  // Relations
+  playlistTracks PlaylistTrack[]
+  queueItems     QueueItem[]
+  playHistory    PlayHistory[]
+
+  @@unique([sourceType, sourceId])
+  @@index([sourceType, sourceId])
+  @@map("tracks")
+}
+
+// Many-to-many relation between Playlist and Track
+model PlaylistTrack {
+  id         String   @id @default(uuid()) @db.Uuid
+  position   Int
+  addedAt    DateTime @default(now()) @map("added_at")
+
+  playlistId String   @map("playlist_id") @db.Uuid
+  playlist   Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+
+  trackId    String   @map("track_id") @db.Uuid
+  track      Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@unique([playlistId, trackId])
+  @@index([playlistId])
+  @@map("playlist_tracks")
+}
+
+// Queue for a station
+model QueueItem {
+  id         String      @id @default(uuid()) @db.Uuid
+  position   Int
+  status     QueueStatus @default(PENDING)
+  addedAt    DateTime    @default(now()) @map("added_at")
+
+  stationId  String      @map("station_id") @db.Uuid
+  station    Station     @relation(fields: [stationId], references: [id], onDelete: Cascade)
+
+  trackId    String      @map("track_id") @db.Uuid
+  track      Track       @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@index([stationId])
+  @@index([stationId, position])
+  @@map("queue_items")
+}
+
+// Play history for a station
+model PlayHistory {
+  id        String   @id @default(uuid()) @db.Uuid
+  playedAt  DateTime @default(now()) @map("played_at")
+  endedAt   DateTime? @map("ended_at")
+
+  stationId String   @map("station_id") @db.Uuid
+  station   Station  @relation(fields: [stationId], references: [id], onDelete: Cascade)
+
+  trackId   String   @map("track_id") @db.Uuid
+  track     Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@index([stationId])
+  @@index([stationId, playedAt])
+  @@map("play_history")
+}
+
+// Enums
+enum SourceType {
+  SPOTIFY
+  YOUTUBE
+}
+
+enum QueueStatus {
+  PENDING
+  PLAYING
+  PLAYED
+  SKIPPED
+}

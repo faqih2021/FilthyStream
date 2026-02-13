@@ -1,0 +1,282 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+
+// Get queue for a station
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id: stationId } = await params
+    
+    const queue = await prisma.queueItem.findMany({
+      where: { stationId },
+      include: {
+        track: true
+      },
+      orderBy: {
+        position: 'asc'
+      }
+    })
+    
+    return NextResponse.json({ queue })
+  } catch (error) {
+    console.error('Error fetching queue:', error)
+    return NextResponse.json(
+      { error: 'Failed to fetch queue' },
+      { status: 500 }
+    )
+  }
+}
+
+// Add track to queue
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id: stationId } = await params
+    const body = await request.json()
+    const { trackId, trackData } = body
+    
+    // Get current queue length for position
+    const queueCount = await prisma.queueItem.count({
+      where: { stationId }
+    })
+    
+    let track
+    
+    // If trackId provided, use existing track
+    if (trackId) {
+      track = await prisma.track.findUnique({
+        where: { id: trackId }
+      })
+      
+      if (!track) {
+        return NextResponse.json(
+          { error: 'Track not found' },
+          { status: 404 }
+        )
+      }
+    } else if (trackData) {
+      // Create or find track
+      track = await prisma.track.upsert({
+        where: {
+          sourceType_sourceId: {
+            sourceType: trackData.sourceType,
+            sourceId: trackData.sourceId
+          }
+        },
+        create: {
+          title: trackData.title,
+          artist: trackData.artist,
+          album: trackData.album,
+          duration: trackData.duration,
+          imageUrl: trackData.imageUrl,
+          sourceType: trackData.sourceType,
+          sourceId: trackData.sourceId,
+          sourceUrl: trackData.sourceUrl
+        },
+        update: {
+          title: trackData.title,
+          artist: trackData.artist,
+          album: trackData.album,
+          duration: trackData.duration,
+          imageUrl: trackData.imageUrl
+        }
+      })
+    } else {
+      return NextResponse.json(
+        { error: 'Either trackId or trackData is required' },
+        { status: 400 }
+      )
+    }
+    
+    // Add to queue
+    const queueItem = await prisma.queueItem.create({
+      data: {
+        stationId,
+        trackId: track.id,
+        position: queueCount,
+        status: 'PENDING'
+      },
+      include: {
+        track: true
+      }
+    })
+    
+    return NextResponse.json({
+      success: true,
+      queueItem
+    })
+  } catch (error) {
+    console.error('Error adding to queue:', error)
+    return NextResponse.json(
+      { error: 'Failed to add to queue' },
+      { status: 500 }
+    )
+  }
+}
+
+// Reorder queue
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id: stationId } = await params
+    const body = await request.json()
+    const { itemId, newPosition, action } = body
+    
+    if (action === 'play-next') {
+      // Mark current playing as played, and set next as playing
+      await prisma.$transaction(async (tx) => {
+        // Mark current as played
+        await tx.queueItem.updateMany({
+          where: {
+            stationId,
+            status: 'PLAYING'
+          },
+          data: {
+            status: 'PLAYED'
+          }
+        })
+        
+        // Get next pending
+        const nextItem = await tx.queueItem.findFirst({
+          where: {
+            stationId,
+            status: 'PENDING'
+          },
+          orderBy: {
+            position: 'asc'
+          }
+        })
+        
+        if (nextItem) {
+          await tx.queueItem.update({
+            where: { id: nextItem.id },
+            data: { status: 'PLAYING' }
+          })
+          
+          // Add to play history
+          await tx.playHistory.create({
+            data: {
+              stationId,
+              trackId: nextItem.trackId
+            }
+          })
+        }
+      })
+      
+      return NextResponse.json({ success: true })
+    }
+    
+    if (action === 'skip') {
+      await prisma.queueItem.update({
+        where: { id: itemId },
+        data: { status: 'SKIPPED' }
+      })
+      
+      return NextResponse.json({ success: true })
+    }
+    
+    // Reorder
+    if (itemId && newPosition !== undefined) {
+      const items = await prisma.queueItem.findMany({
+        where: { stationId },
+        orderBy: { position: 'asc' }
+      })
+      
+      const currentIndex = items.findIndex(item => item.id === itemId)
+      if (currentIndex === -1) {
+        return NextResponse.json(
+          { error: 'Item not found in queue' },
+          { status: 404 }
+        )
+      }
+      
+      // Remove and reinsert
+      const [movedItem] = items.splice(currentIndex, 1)
+      items.splice(newPosition, 0, movedItem)
+      
+      // Update all positions
+      await prisma.$transaction(
+        items.map((item, index) =>
+          prisma.queueItem.update({
+            where: { id: item.id },
+            data: { position: index }
+          })
+        )
+      )
+      
+      return NextResponse.json({ success: true })
+    }
+    
+    return NextResponse.json(
+      { error: 'Invalid action or parameters' },
+      { status: 400 }
+    )
+  } catch (error) {
+    console.error('Error updating queue:', error)
+    return NextResponse.json(
+      { error: 'Failed to update queue' },
+      { status: 500 }
+    )
+  }
+}
+
+// Remove from queue
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id: stationId } = await params
+    const { searchParams } = new URL(request.url)
+    const itemId = searchParams.get('itemId')
+    const clearAll = searchParams.get('clearAll')
+    
+    if (clearAll === 'true') {
+      await prisma.queueItem.deleteMany({
+        where: { stationId }
+      })
+      
+      return NextResponse.json({ success: true })
+    }
+    
+    if (!itemId) {
+      return NextResponse.json(
+        { error: 'Item ID is required' },
+        { status: 400 }
+      )
+    }
+    
+    await prisma.queueItem.delete({
+      where: { id: itemId }
+    })
+    
+    // Reorder remaining items
+    const items = await prisma.queueItem.findMany({
+      where: { stationId },
+      orderBy: { position: 'asc' }
+    })
+    
+    await prisma.$transaction(
+      items.map((item, index) =>
+        prisma.queueItem.update({
+          where: { id: item.id },
+          data: { position: index }
+        })
+      )
+    )
+    
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Error removing from queue:', error)
+    return NextResponse.json(
+      { error: 'Failed to remove from queue' },
+      { status: 500 }
+    )
+  }
+}
