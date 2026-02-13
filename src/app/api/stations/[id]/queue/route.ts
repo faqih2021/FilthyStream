@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { Prisma } from '@prisma/client'
 
 // Get queue for a station
 export async function GET(
@@ -130,7 +131,7 @@ export async function PATCH(
     
     if (action === 'play-next') {
       // Mark current playing as played, and set next as playing
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
         // Mark current as played
         await tx.queueItem.updateMany({
           where: {

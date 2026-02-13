@@ -125,11 +125,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     try {
-      await supabase.auth.signOut();
-    } finally {
       setUser(null);
+      await supabase.auth.signOut({ scope: 'local' });
+      // Clear any cached state
       router.push('/login');
       router.refresh();
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Still clear user state even if signOut fails
+      setUser(null);
+      router.push('/login');
     }
   };
 
