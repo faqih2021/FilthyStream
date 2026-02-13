@@ -44,6 +44,9 @@ export async function GET(
     })
     
     // Return station info (hide sensitive data)
+    const playingTrack = station.queue.find(q => q.status === 'PLAYING')?.track
+    const pendingTracks = station.queue.filter(q => q.status === 'PENDING')
+    
     return NextResponse.json({
       station: {
         id: station.id,
@@ -53,8 +56,11 @@ export async function GET(
         isLive: station.isLive,
         listenKey: station.listenKey,
         listenerCount: station.listenerCount,
-        currentTrack: station.queue.find(q => q.status === 'PLAYING')?.track || null,
-        upNext: station.queue.filter(q => q.status === 'PENDING').slice(0, 5).map(q => q.track)
+        // If nothing is playing, use first pending track
+        currentTrack: playingTrack || (pendingTracks.length > 0 ? pendingTracks[0].track : null),
+        upNext: playingTrack 
+          ? pendingTracks.slice(0, 5).map(q => q.track)
+          : pendingTracks.slice(1, 6).map(q => q.track)
       }
     })
   } catch (error) {

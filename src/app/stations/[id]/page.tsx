@@ -50,6 +50,7 @@ export default function StationPage({ params }: StationPageProps) {
     queue,
     setIsPlaying,
     addToQueue,
+    setQueue,
     playNext,
     setCurrentStationId
   } = usePlayerStore()
@@ -64,6 +65,28 @@ export default function StationPage({ params }: StationPageProps) {
         const data = await response.json()
         setStation(data.station)
         setCurrentStationId(id)
+        
+        // Load queue from database
+        if (data.station.queue && data.station.queue.length > 0) {
+          const dbQueue = data.station.queue.map((item: { id: string; position: number; status: string; track: Track }) => ({
+            id: item.id,
+            position: item.position,
+            status: item.status,
+            track: {
+              id: item.track.id,
+              title: item.track.title,
+              artist: item.track.artist,
+              album: item.track.album,
+              duration: item.track.duration,
+              imageUrl: item.track.imageUrl,
+              sourceType: item.track.sourceType,
+              sourceId: item.track.sourceId,
+              sourceUrl: item.track.sourceUrl
+            }
+          }))
+          setQueue(dbQueue)
+        }
+        
         setError(null)
       } catch (err) {
         setError('Failed to load station')
@@ -79,7 +102,7 @@ export default function StationPage({ params }: StationPageProps) {
     return () => {
       setCurrentStationId(null)
     }
-  }, [id, setCurrentStationId])
+  }, [id, setCurrentStationId, setQueue])
   
   const handleAddTrack = async (url: string) => {
     setIsAddingTrack(true)
@@ -99,8 +122,7 @@ export default function StationPage({ params }: StationPageProps) {
       }
       
       const data = await response.json()
-      const track: Track = {
-        id: crypto.randomUUID(),
+      const trackData = {
         title: data.track.title,
         artist: data.track.artist,
         album: data.track.album,
@@ -111,18 +133,52 @@ export default function StationPage({ params }: StationPageProps) {
         sourceUrl: data.track.sourceUrl
       }
       
-      addToQueue({
-        id: crypto.randomUUID(),
-        position: queue.length,
-        status: 'PENDING',
-        track
+      // Save to database
+      const queueResponse = await fetch(`/api/stations/${id}/queue`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ trackData })
       })
+      
+      if (queueResponse.ok) {
+        const queueData = await queueResponse.json()
+        // Add to local queue with the ID from database
+        addToQueue({
+          id: queueData.queueItem.id,
+          position: queue.length,
+          status: 'PENDING',
+          track: {
+            id: queueData.queueItem.track.id,
+            title: queueData.queueItem.track.title,
+            artist: queueData.queueItem.track.artist,
+            album: queueData.queueItem.track.album,
+            duration: queueData.queueItem.track.duration,
+            imageUrl: queueData.queueItem.track.imageUrl,
+            sourceType: queueData.queueItem.track.sourceType,
+            sourceId: queueData.queueItem.track.sourceId,
+            sourceUrl: queueData.queueItem.track.sourceUrl
+          }
+        })
+      } else {
+        // Fallback to local-only queue
+        const track: Track = {
+          id: crypto.randomUUID(),
+          ...trackData
+        }
+        addToQueue({
+          id: crypto.randomUUID(),
+          position: queue.length,
+          status: 'PENDING',
+          track
+        })
+      }
     } catch (error) {
       // Fallback: create basic track from URL
       const parsed = parseUrl(url)
       if (parsed) {
-        const track: Track = {
-          id: crypto.randomUUID(),
+        const trackData = {
           title: 'YouTube Video',
           artist: 'Loading...',
           album: null,
@@ -135,12 +191,58 @@ export default function StationPage({ params }: StationPageProps) {
           sourceUrl: url
         }
         
-        addToQueue({
-          id: crypto.randomUUID(),
-          position: queue.length,
-          status: 'PENDING',
-          track
-        })
+        // Try to save to database
+        try {
+          const queueResponse = await fetch(`/api/stations/${id}/queue`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ trackData })
+          })
+          
+          if (queueResponse.ok) {
+            const queueData = await queueResponse.json()
+            addToQueue({
+              id: queueData.queueItem.id,
+              position: queue.length,
+              status: 'PENDING',
+              track: {
+                id: queueData.queueItem.track.id,
+                title: queueData.queueItem.track.title,
+                artist: queueData.queueItem.track.artist,
+                album: queueData.queueItem.track.album,
+                duration: queueData.queueItem.track.duration,
+                imageUrl: queueData.queueItem.track.imageUrl,
+                sourceType: queueData.queueItem.track.sourceType,
+                sourceId: queueData.queueItem.track.sourceId,
+                sourceUrl: queueData.queueItem.track.sourceUrl
+              }
+            })
+          } else {
+            const track: Track = {
+              id: crypto.randomUUID(),
+              ...trackData
+            }
+            addToQueue({
+              id: crypto.randomUUID(),
+              position: queue.length,
+              status: 'PENDING',
+              track
+            })
+          }
+        } catch {
+          const track: Track = {
+            id: crypto.randomUUID(),
+            ...trackData
+          }
+          addToQueue({
+            id: crypto.randomUUID(),
+            position: queue.length,
+            status: 'PENDING',
+            track
+          })
+        }
       }
     } finally {
       setIsAddingTrack(false)
@@ -154,10 +256,29 @@ export default function StationPage({ params }: StationPageProps) {
   }
   
   const handleCopyStreamUrl = () => {
-    const streamUrl = `${window.location.origin}/api/stream/${station?.listenKey}`
+    const streamUrl = `${window.location.origin}/listen/${station?.listenKey}`
     navigator.clipboard.writeText(streamUrl)
     setStreamCopied(true)
     setTimeout(() => setStreamCopied(false), 2000)
+  }
+  
+  // Sync playNext with database
+  const handlePlayNext = async () => {
+    // Update database first
+    try {
+      await fetch(`/api/stations/${id}/queue`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ action: 'play-next' })
+      })
+    } catch (error) {
+      console.error('Failed to sync with database:', error)
+    }
+    
+    // Then update local state
+    playNext()
   }
   
   const pendingTracks = queue.filter(item => item.status === 'PENDING')
@@ -265,7 +386,7 @@ export default function StationPage({ params }: StationPageProps) {
                   <button
                     onClick={() => {
                       if (pendingTracks.length > 0 && !currentTrack) {
-                        playNext()
+                        handlePlayNext()
                       }
                       setIsPlaying(!isPlaying)
                     }}
@@ -285,7 +406,7 @@ export default function StationPage({ params }: StationPageProps) {
                   </button>
                   
                   <button
-                    onClick={playNext}
+                    onClick={handlePlayNext}
                     disabled={pendingTracks.length === 0}
                     className="flex items-center gap-2 px-4 py-3 border border-[var(--border)] rounded-full font-medium hover:bg-white/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
@@ -433,7 +554,7 @@ export default function StationPage({ params }: StationPageProps) {
                   <Play className="w-5 h-5 text-black ml-0.5" />
                 )}
               </button>
-              <button onClick={playNext} className="text-gray-400 hover:text-white">
+              <button onClick={handlePlayNext} className="text-gray-400 hover:text-white">
                 <SkipForward className="w-5 h-5" />
               </button>
             </div>
