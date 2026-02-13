@@ -20,6 +20,8 @@ import {
 } from 'lucide-react'
 import { formatDuration } from '@/lib/url-parser'
 
+const LOGO_URL = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/logo-etc/filthystream-logo.png`
+
 interface ListenPageProps {
   params: Promise<{ listenKey: string }>
 }
@@ -218,9 +220,7 @@ export default function ListenPage({ params }: ListenPageProps) {
       <header className="border-b border-[var(--border)] bg-[var(--card-bg)] px-6 py-4">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-              <Radio className="w-6 h-6 text-white" />
-            </div>
+            <Image src={LOGO_URL} alt="FilthyStream" width={40} height={40} className="w-10 h-10 rounded-xl object-cover" />
             <span className="text-xl font-bold gradient-text">FilthyStream</span>
           </Link>
           

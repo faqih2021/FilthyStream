@@ -1,9 +1,12 @@
 'use client'
 
 import { Radio, Music, ListMusic, Plus, Home, User, LogIn } from 'lucide-react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useAuth } from '@/context/auth-context'
+
+const LOGO_URL = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/logo-etc/filthystream-logo.png`
 
 export function Sidebar() {
   const pathname = usePathname()
@@ -21,9 +24,7 @@ export function Sidebar() {
       {/* Logo */}
       <div className="p-6 border-b border-[var(--border)]">
         <Link href="/" className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-            <Radio className="w-6 h-6 text-white" />
-          </div>
+          <Image src={LOGO_URL} alt="FilthyStream" width={40} height={40} className="w-10 h-10 rounded-xl object-cover" />
           <span className="text-xl font-bold gradient-text">FilthyStream</span>
         </Link>
       </div>

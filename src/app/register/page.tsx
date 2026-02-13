@@ -3,8 +3,11 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Radio, Eye, EyeOff, Loader2, Check, X } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Check, X } from 'lucide-react';
+import Image from 'next/image';
 import { EmailConfirmModal } from '@/components/modal';
+
+const LOGO_URL = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/logo-etc/filthystream-logo.png`;
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -79,9 +82,7 @@ export default function RegisterPage() {
         {/* Logo */}
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center gap-2">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-              <Radio className="w-6 h-6 text-white" />
-            </div>
+            <Image src={LOGO_URL} alt="FilthyStream" width={48} height={48} className="w-12 h-12 rounded-xl object-cover" />
             <span className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
               FilthyStream
             </span>

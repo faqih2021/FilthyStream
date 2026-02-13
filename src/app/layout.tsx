@@ -13,9 +13,15 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const LOGO_URL = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/logo-etc/filthystream-logo.png`;
+
 export const metadata: Metadata = {
   title: "FilthyStream - Radio Stream from YouTube",
   description: "Create your own radio stream by combining music from YouTube playlists",
+  icons: {
+    icon: LOGO_URL,
+    apple: LOGO_URL,
+  },
 };
 
 export default function RootLayout({
