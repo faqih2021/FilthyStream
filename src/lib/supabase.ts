@@ -7,7 +7,7 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 // Client-side Supabase client with auth persistence
 export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey)
 
-// Server-side Supabase client
+// Server-side Supabase client (for public data, no auth)
 export const supabaseAdmin = createClient(supabaseUrl, supabaseAnonKey)
 
 // Types for Supabase Auth

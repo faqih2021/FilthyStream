@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { cookies } from 'next/headers';
+import { createSupabaseServerClient } from './supabase-server';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
 const SALT_ROUNDS = 12;
@@ -37,12 +38,22 @@ export function verifyToken(token: string): JWTPayload | null {
 
 // Get current user from cookies
 export async function getCurrentUser(): Promise<JWTPayload | null> {
-  const cookieStore = await cookies();
-  const token = cookieStore.get('auth-token')?.value;
-  
-  if (!token) return null;
-  
-  return verifyToken(token);
+  try {
+    const supabase = await createSupabaseServerClient();
+    const { data: { user }, error } = await supabase.auth.getUser();
+    
+    if (error || !user) {
+      return null;
+    }
+    
+    return {
+      userId: user.id,
+      email: user.email || '',
+      username: user.user_metadata?.username || user.email?.split('@')[0] || 'user'
+    };
+  } catch {
+    return null;
+  }
 }
 
 // Validate email format
