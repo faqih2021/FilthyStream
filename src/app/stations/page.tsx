@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Radio, Search, Filter, Plus, Users, Play } from 'lucide-react'
+import { Radio, Search, Plus, Users, Play } from 'lucide-react'
+import { AppLayout } from '@/components/app-layout'
 import { StationCard } from '@/components/station-card'
 
 // Demo stations
@@ -98,36 +99,13 @@ export default function StationsPage() {
   const totalListeners = demoStations.reduce((sum, s) => sum + s.listenersCount, 0)
   
   return (
-    <div className="min-h-screen bg-[var(--background)]">
-      {/* Header */}
-      <header className="border-b border-[var(--border)] bg-[var(--card-bg)] sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/" className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-                <Radio className="w-6 h-6 text-white" />
-              </div>
-              <span className="text-xl font-bold gradient-text">FilthyStream</span>
-            </Link>
-          </div>
-          
-          <Link
-            href="/stations/create"
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg font-semibold hover:opacity-90 transition-opacity"
-          >
-            <Plus className="w-5 h-5" />
-            Create Station
-          </Link>
-        </div>
-      </header>
-      
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-6 py-8">
+    <AppLayout>
+      <div className="p-8">
         {/* Page Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">Explore Stations</h1>
           <p className="text-gray-400">
-            Discover radio stations streaming music from Spotify and YouTube
+            Discover radio stations streaming music from YouTube
           </p>
         </div>
         
@@ -238,7 +216,7 @@ export default function StationsPage() {
             ))}
           </div>
         )}
-      </main>
-    </div>
+      </div>
+    </AppLayout>
   )
 }

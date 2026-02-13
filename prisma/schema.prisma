@@ -66,14 +66,16 @@ model Track {
   duration    Int?        // Duration in seconds
   imageUrl    String?     @map("image_url") @db.Text
   sourceType  SourceType  @map("source_type")
-  sourceId    String      @map("source_id") @db.VarChar(255) // Spotify track ID or YouTube video ID
+  sourceId    String      @map("source_id") @db.VarChar(255) // YouTube video ID
   sourceUrl   String      @map("source_url") @db.Text // Original URL
   createdAt   DateTime    @default(now()) @map("created_at")
 
   // Relations
-  playlistTracks PlaylistTrack[]
-  queueItems     QueueItem[]
-  playHistory    PlayHistory[]
+  playlistTracks   PlaylistTrack[]
+  queueItems       QueueItem[]
+  playHistory      PlayHistory[]
+  savedTracks      SavedTrack[]
+  listeningHistory ListeningHistory[]
 
   @@unique([sourceType, sourceId])
   @@index([sourceType, sourceId])
@@ -130,6 +132,35 @@ model PlayHistory {
   @@index([stationId])
   @@index([stationId, playedAt])
   @@map("play_history")
+}
+
+// User's saved tracks (library)
+model SavedTrack {
+  id        String   @id @default(uuid()) @db.Uuid
+  savedAt   DateTime @default(now()) @map("saved_at")
+
+  userId    String   @map("user_id") @db.Uuid
+  trackId   String   @map("track_id") @db.Uuid
+  track     Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, trackId])
+  @@index([userId])
+  @@index([savedAt(sort: Desc)])
+  @@map("saved_tracks")
+}
+
+// User's listening history
+model ListeningHistory {
+  id        String   @id @default(uuid()) @db.Uuid
+  playedAt  DateTime @default(now()) @map("played_at")
+
+  userId    String   @map("user_id") @db.Uuid
+  trackId   String   @map("track_id") @db.Uuid
+  track     Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, playedAt(sort: Desc)])
+  @@map("listening_history")
 }
 
 // Enums

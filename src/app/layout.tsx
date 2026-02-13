@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "FilthyStream - Radio Stream from Spotify & YouTube",
-  description: "Create your own radio stream by combining music from Spotify and YouTube playlists",
+  title: "FilthyStream - Radio Stream from YouTube",
+  description: "Create your own radio stream by combining music from YouTube playlists",
 };
 
 export default function RootLayout({

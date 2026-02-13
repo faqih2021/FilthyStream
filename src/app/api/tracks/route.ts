@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { parseUrl } from '@/lib/url-parser'
+import { getYouTubeVideo } from '@/lib/youtube'
 
 // Fetch track metadata from URL
 export async function POST(request: NextRequest) {
@@ -18,24 +19,18 @@ export async function POST(request: NextRequest) {
     
     if (!parsed) {
       return NextResponse.json(
-        { error: 'Invalid URL. Must be a Spotify or YouTube URL' },
+        { error: 'Invalid URL. Must be a YouTube URL' },
         { status: 400 }
       )
     }
     
-    let trackData
-    
-    if (parsed.type === 'YOUTUBE') {
-      trackData = await fetchYouTubeMetadata(parsed.id)
-    } else if (parsed.type === 'SPOTIFY') {
-      trackData = await fetchSpotifyMetadata(parsed.id, parsed.contentType)
-    }
+    const trackData = await fetchYouTubeMetadata(parsed.id)
     
     return NextResponse.json({
       success: true,
       track: {
         ...trackData,
-        sourceType: parsed.type,
+        sourceType: 'YOUTUBE',
         sourceId: parsed.id,
         sourceUrl: url
       }
@@ -50,7 +45,23 @@ export async function POST(request: NextRequest) {
 }
 
 async function fetchYouTubeMetadata(videoId: string) {
-  // Try to fetch from YouTube oEmbed API (no API key required)
+  // Try YouTube Data API first (requires API key)
+  if (process.env.YOUTUBE_API_KEY) {
+    try {
+      const video = await getYouTubeVideo(videoId)
+      return {
+        title: video.title,
+        artist: video.channel,
+        album: null,
+        duration: video.duration,
+        imageUrl: video.image
+      }
+    } catch (error) {
+      console.error('YouTube API error:', error)
+    }
+  }
+  
+  // Fallback: Try oEmbed API (no API key required)
   try {
     const response = await fetch(
       `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`
@@ -70,78 +81,12 @@ async function fetchYouTubeMetadata(videoId: string) {
     console.error('YouTube oEmbed error:', error)
   }
   
-  // Fallback: Return basic info
+  // Final fallback: Return basic info
   return {
     title: `YouTube Video (${videoId})`,
     artist: 'Unknown',
     album: null,
     duration: null,
     imageUrl: `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`
-  }
-}
-
-async function fetchSpotifyMetadata(id: string, contentType: string) {
-  // For Spotify, we would need OAuth token
-  // For now, return a placeholder
-  // In production, implement Spotify Web API integration
-  
-  const spotifyClientId = process.env.SPOTIFY_CLIENT_ID
-  const spotifyClientSecret = process.env.SPOTIFY_CLIENT_SECRET
-  
-  if (spotifyClientId && spotifyClientSecret) {
-    try {
-      // Get access token
-      const tokenResponse = await fetch('https://accounts.spotify.com/api/token', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Authorization': 'Basic ' + Buffer.from(`${spotifyClientId}:${spotifyClientSecret}`).toString('base64')
-        },
-        body: 'grant_type=client_credentials'
-      })
-      
-      if (tokenResponse.ok) {
-        const tokenData = await tokenResponse.json()
-        const accessToken = tokenData.access_token
-        
-        // Fetch track/playlist/album data
-        const endpoint = contentType === 'track' 
-          ? `https://api.spotify.com/v1/tracks/${id}`
-          : contentType === 'playlist'
-          ? `https://api.spotify.com/v1/playlists/${id}`
-          : `https://api.spotify.com/v1/albums/${id}`
-        
-        const dataResponse = await fetch(endpoint, {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`
-          }
-        })
-        
-        if (dataResponse.ok) {
-          const data = await dataResponse.json()
-          
-          if (contentType === 'track') {
-            return {
-              title: data.name,
-              artist: data.artists.map((a: { name: string }) => a.name).join(', '),
-              album: data.album?.name,
-              duration: Math.floor(data.duration_ms / 1000),
-              imageUrl: data.album?.images?.[0]?.url
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Spotify API error:', error)
-    }
-  }
-  
-  // Fallback
-  return {
-    title: `Spotify ${contentType} (${id})`,
-    artist: 'Unknown',
-    album: null,
-    duration: null,
-    imageUrl: null
   }
 }

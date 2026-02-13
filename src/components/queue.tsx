@@ -80,7 +80,7 @@ export function Queue() {
           <div className="flex flex-col items-center justify-center h-full text-gray-400 p-8">
             <Radio className="w-12 h-12 mb-4 opacity-50" />
             <p className="text-center">Queue is empty</p>
-            <p className="text-sm text-center mt-1">Add tracks from Spotify or YouTube</p>
+            <p className="text-sm text-center mt-1">Add tracks from YouTube</p>
           </div>
         ) : (
           <div className="p-2">
@@ -201,11 +201,7 @@ function QueueItemRow({
         <p className="text-sm font-medium truncate">{item.track.title}</p>
         <div className="flex items-center gap-2">
           <p className="text-xs text-gray-400 truncate">{item.track.artist || 'Unknown'}</p>
-          {item.track.sourceType === 'SPOTIFY' ? (
-            <span className="w-2 h-2 rounded-full bg-[#1db954]" />
-          ) : (
-            <span className="w-2 h-2 rounded-full bg-red-500" />
-          )}
+          <span className="w-2 h-2 rounded-full bg-red-500" />
         </div>
       </div>
       

@@ -73,7 +73,7 @@ export default function CreateStationPage() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">Create Radio Station</h1>
           <p className="text-gray-400">
-            Set up your station and start streaming music from Spotify and YouTube
+            Set up your station and start streaming music from YouTube
           </p>
         </div>
         

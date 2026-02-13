@@ -26,7 +26,8 @@ export function Player() {
     volume,
     setIsPlaying,
     setVolume,
-    playNext
+    playNext,
+    playPrevious
   } = usePlayerStore()
   
   const [showQueue, setShowQueue] = useState(false)
@@ -85,15 +86,9 @@ export function Player() {
               <p className="font-semibold truncate">{currentTrack.title}</p>
               <p className="text-sm text-gray-400 truncate">{currentTrack.artist || 'Unknown Artist'}</p>
               <div className="flex items-center gap-1 mt-1">
-                {currentTrack.sourceType === 'SPOTIFY' ? (
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-[#1db954]/20 text-[#1db954]">
-                    Spotify
-                  </span>
-                ) : (
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/20 text-red-500">
-                    YouTube
-                  </span>
-                )}
+                <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/20 text-red-500">
+                  YouTube
+                </span>
               </div>
             </div>
           </>
@@ -116,7 +111,10 @@ export function Player() {
           <button className="text-gray-400 hover:text-white transition-colors">
             <Shuffle className="w-5 h-5" />
           </button>
-          <button className="text-gray-400 hover:text-white transition-colors">
+          <button
+            onClick={playPrevious}
+            className="text-gray-400 hover:text-white transition-colors"
+          >
             <SkipBack className="w-5 h-5" />
           </button>
           <button

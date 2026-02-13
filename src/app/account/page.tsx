@@ -37,6 +37,13 @@ export default function AccountPage() {
   const [photoLoading, setPhotoLoading] = useState(false);
   const [photoMessage, setPhotoMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showPhotoSuccessModal, setShowPhotoSuccessModal] = useState<string | null>(null);
+  
+  // Password success modal state
+  const [showPasswordSuccessModal, setShowPasswordSuccessModal] = useState(false);
+  
+  // Logout state
+  const [logoutLoading, setLogoutLoading] = useState(false);
 
   // Redirect if not authenticated (using useEffect to avoid render error)
   useEffect(() => {
@@ -73,9 +80,9 @@ export default function AccountPage() {
         return;
       }
       
-      // Validate file size (max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        setPhotoMessage({ type: 'error', text: 'Image must be less than 5MB' });
+      // Validate file size (max 300KB)
+      if (file.size > 300 * 1024) {
+        setPhotoMessage({ type: 'error', text: 'Image must be less than 300KB' });
         return;
       }
       
@@ -94,9 +101,16 @@ export default function AccountPage() {
     try {
       // Delete old avatar if exists
       if (user.image) {
-        const oldPath = user.image.split('/avatars/').pop();
-        if (oldPath) {
-          await supabase.storage.from('avatars').remove([oldPath]);
+        const urlParts = user.image.split('/avatars/');
+        if (urlParts.length > 1) {
+          // Extract path and remove any query strings
+          const oldPath = decodeURIComponent(urlParts[1].split('?')[0]);
+          if (oldPath) {
+            const { error: deleteError } = await supabase.storage.from('avatars').remove([oldPath]);
+            if (deleteError) {
+              console.warn('Failed to delete old avatar:', deleteError);
+            }
+          }
         }
       }
 
@@ -129,9 +143,9 @@ export default function AccountPage() {
         throw updateError;
       }
 
-      setPhotoMessage({ type: 'success', text: 'Profile photo updated!' });
       setSelectedFile(null);
       await refreshUser();
+      setShowPhotoSuccessModal('Profile photo updated successfully!');
     } catch (error) {
       console.error('Upload error:', error);
       setPhotoMessage({ type: 'error', text: 'Failed to upload photo' });
@@ -148,9 +162,15 @@ export default function AccountPage() {
 
     try {
       // Delete from storage
-      const oldPath = user.image.split('/avatars/').pop();
-      if (oldPath) {
-        await supabase.storage.from('avatars').remove([oldPath]);
+      const urlParts = user.image.split('/avatars/');
+      if (urlParts.length > 1) {
+        const oldPath = decodeURIComponent(urlParts[1].split('?')[0]);
+        if (oldPath) {
+          const { error: deleteError } = await supabase.storage.from('avatars').remove([oldPath]);
+          if (deleteError) {
+            console.warn('Failed to delete avatar from storage:', deleteError);
+          }
+        }
       }
 
       // Update user metadata
@@ -164,8 +184,8 @@ export default function AccountPage() {
 
       setPreviewUrl(null);
       setShowDeleteConfirm(false);
-      setPhotoMessage({ type: 'success', text: 'Profile photo deleted!' });
       await refreshUser();
+      setShowPhotoSuccessModal('Profile photo deleted successfully!');
     } catch (error) {
       console.error('Delete error:', error);
       setPhotoMessage({ type: 'error', text: 'Failed to delete photo' });
@@ -207,10 +227,10 @@ export default function AccountPage() {
       if (error) {
         setPasswordMessage({ type: 'error', text: error.message });
       } else {
-        setPasswordMessage({ type: 'success', text: 'Password updated successfully!' });
         setNewPassword('');
         setConfirmPassword('');
         setIsChangingPassword(false);
+        setShowPasswordSuccessModal(true);
       }
     } catch {
       setPasswordMessage({ type: 'error', text: 'Failed to update password' });
@@ -220,8 +240,14 @@ export default function AccountPage() {
   };
 
   const handleLogout = async () => {
-    // logout() already handles navigation
-    await logout();
+    console.log('handleLogout called');
+    setLogoutLoading(true);
+    try {
+      await logout();
+    } catch (error) {
+      console.error('Logout failed:', error);
+      setLogoutLoading(false);
+    }
   };
 
   const hasUnsavedPhoto = selectedFile !== null;
@@ -337,6 +363,9 @@ export default function AccountPage() {
               {photoMessage.text}
             </div>
           )}
+          
+          {/* Photo Size Hint */}
+          <p className="mt-2 text-xs text-zinc-500">Max file size: 300KB</p>
           
           <h1 className="text-3xl font-bold text-white mt-4">
             {user.username || 'User'}
@@ -472,12 +501,70 @@ export default function AccountPage() {
         {/* Logout Button */}
         <button
           onClick={handleLogout}
-          className="w-full py-4 bg-red-600/20 hover:bg-red-600/30 border border-red-600/50 text-red-400 font-semibold rounded-2xl transition-colors flex items-center justify-center gap-2"
+          disabled={logoutLoading}
+          className="w-full py-4 bg-red-600/20 hover:bg-red-600/30 border border-red-600/50 text-red-400 font-semibold rounded-2xl transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <LogOut className="w-5 h-5" />
-          Log Out
+          {logoutLoading ? (
+            <>
+              <Loader2 className="w-5 h-5 animate-spin" />
+              Logging out...
+            </>
+          ) : (
+            <>
+              <LogOut className="w-5 h-5" />
+              Log Out
+            </>
+          )}
         </button>
       </div>
+
+      {/* Password Success Modal */}
+      {showPasswordSuccessModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-md w-full shadow-2xl">
+            <div className="text-center">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-500/20 flex items-center justify-center">
+                <Check className="w-8 h-8 text-green-400" />
+              </div>
+              <h3 className="text-xl font-bold text-white mb-2">Password Updated!</h3>
+              <p className="text-gray-400 mb-6">
+                Your password has been changed successfully. For security, you will be logged out and need to sign in with your new password.
+              </p>
+              <button
+                onClick={async () => {
+                  setShowPasswordSuccessModal(false);
+                  await logout();
+                }}
+                className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2"
+              >
+                <LogOut className="w-5 h-5" />
+                Sign In Again
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Photo Success Modal */}
+      {showPhotoSuccessModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-md w-full shadow-2xl">
+            <div className="text-center">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-500/20 flex items-center justify-center">
+                <Check className="w-8 h-8 text-green-400" />
+              </div>
+              <h3 className="text-xl font-bold text-white mb-2">Success!</h3>
+              <p className="text-gray-400 mb-6">{showPhotoSuccessModal}</p>
+              <button
+                onClick={() => setShowPhotoSuccessModal(null)}
+                className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-semibold rounded-xl transition-all"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 
@@ -38,7 +38,7 @@ function mapSupabaseUser(supabaseUser: SupabaseUser | null): User | null {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const router = useRouter();
+  const pathname = usePathname();
 
   const refreshUser = useCallback(async () => {
     try {
@@ -82,10 +82,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
 
+    // Refresh user data when tab becomes visible again
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshUser();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Also refresh when window regains focus
+    const handleFocus = () => {
+      refreshUser();
+    };
+    window.addEventListener('focus', handleFocus);
+
     return () => {
       subscription.unsubscribe();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
     };
   }, [refreshUser]);
+
+  // Refresh user data when route changes
+  useEffect(() => {
+    refreshUser();
+  }, [pathname, refreshUser]);
 
   const login = async (identifier: string, password: string) => {
     try {
@@ -142,25 +163,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = useCallback(async () => {
-    console.log('Logout called');
-    // Clear state immediately
+    console.log('Logout function called');
+    
+    // Clear user state immediately
     setUser(null);
     setLoading(false);
     
     try {
-      // Sign out from Supabase (global scope to clear all sessions)
-      const { error } = await supabase.auth.signOut({ scope: 'global' });
-      if (error) {
-        console.error('Supabase signOut error:', error);
-      }
+      // Sign out from Supabase client
+      await supabase.auth.signOut();
+      console.log('Supabase signOut completed');
+      
+      // Call logout API to clear server-side cookies
+      await fetch('/api/auth/logout', { method: 'POST' });
+      console.log('Cookies cleared via API');
     } catch (error) {
       console.error('Logout error:', error);
     }
     
-    // Navigate to login
-    router.push('/login');
-    router.refresh();
-  }, [router]);
+    // Force navigate to login with hard refresh to clear all state
+    console.log('Navigating to /login');
+    window.location.href = '/login';
+  }, []);
 
   return (
     <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUser }}>

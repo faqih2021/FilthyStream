@@ -2,12 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { 
   detectMediaSource, 
   parseMediaUrl,
-  spotifyTrackToUnified,
-  spotifyPlaylistToUnified,
   youtubeVideoToUnified,
   youtubePlaylistToUnified,
 } from '@/lib/media';
-import { getSpotifyTrack, getSpotifyPlaylist, getSpotifyAlbum } from '@/lib/spotify';
 import { getYouTubeVideo, getYouTubePlaylist } from '@/lib/youtube';
 
 export async function GET(request: NextRequest) {
@@ -26,46 +23,9 @@ export async function GET(request: NextRequest) {
 
     if (parsed.source === 'unknown' || !parsed.type || !parsed.id) {
       return NextResponse.json(
-        { error: 'Could not parse URL. Supported: Spotify (track/playlist/album), YouTube (video/playlist)' },
+        { error: 'Could not parse URL. Supported: YouTube (video/playlist)' },
         { status: 400 }
       );
-    }
-
-    // Handle Spotify
-    if (parsed.source === 'spotify') {
-      if (!process.env.SPOTIFY_CLIENT_ID || !process.env.SPOTIFY_CLIENT_SECRET) {
-        return NextResponse.json(
-          { error: 'Spotify API not configured' },
-          { status: 500 }
-        );
-      }
-
-      if (parsed.type === 'track') {
-        const track = await getSpotifyTrack(parsed.id);
-        return NextResponse.json({
-          source: 'spotify',
-          type: 'track',
-          data: spotifyTrackToUnified(track),
-        });
-      }
-
-      if (parsed.type === 'playlist') {
-        const playlist = await getSpotifyPlaylist(parsed.id);
-        return NextResponse.json({
-          source: 'spotify',
-          type: 'playlist',
-          data: spotifyPlaylistToUnified(playlist),
-        });
-      }
-
-      if (parsed.type === 'album') {
-        const album = await getSpotifyAlbum(parsed.id);
-        return NextResponse.json({
-          source: 'spotify',
-          type: 'album',
-          data: spotifyPlaylistToUnified(album),
-        });
-      }
     }
 
     // Handle YouTube

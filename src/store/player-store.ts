@@ -7,7 +7,7 @@ export interface Track {
   album: string | null
   duration: number | null
   imageUrl: string | null
-  sourceType: 'SPOTIFY' | 'YOUTUBE'
+  sourceType: 'YOUTUBE'
   sourceId: string
   sourceUrl: string
 }
@@ -45,6 +45,7 @@ interface PlayerState {
   reorderQueue: (fromIndex: number, toIndex: number) => void
   clearQueue: () => void
   playNext: () => void
+  playPrevious: () => void
   playTrack: (track: Track) => void
   setCurrentStationId: (stationId: string | null) => void
 }
@@ -113,6 +114,27 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       })
     } else {
       set({ currentTrack: null, isPlaying: false })
+    }
+  },
+  
+  playPrevious: () => {
+    const { queue } = get()
+    const playedTracks = queue.filter((item) => item.status === 'PLAYED')
+    
+    if (playedTracks.length > 0) {
+      const prevItem = playedTracks[playedTracks.length - 1]
+      set({
+        currentTrack: prevItem.track,
+        isPlaying: true,
+        currentTime: 0,
+        queue: queue.map((item) => 
+          item.id === prevItem.id 
+            ? { ...item, status: 'PLAYING' as const }
+            : item.status === 'PLAYING'
+            ? { ...item, status: 'PENDING' as const }
+            : item
+        )
+      })
     }
   },
   

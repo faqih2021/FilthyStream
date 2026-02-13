@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Radio, Eye, EyeOff, Loader2, Mail, AlertCircle } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -33,6 +34,14 @@ export default function LoginPage() {
         setError(data.error || 'Login failed');
         setErrorCode(data.code || '');
         return;
+      }
+
+      // Sync session with client-side Supabase
+      if (data.session?.accessToken && data.session?.refreshToken) {
+        await supabase.auth.setSession({
+          access_token: data.session.accessToken,
+          refresh_token: data.session.refreshToken,
+        });
       }
 
       // Redirect to home on success

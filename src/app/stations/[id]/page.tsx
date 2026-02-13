@@ -115,7 +115,7 @@ export default function StationPage({ params }: StationPageProps) {
       if (parsed) {
         const track: Track = {
           id: crypto.randomUUID(),
-          title: parsed.type === 'YOUTUBE' ? 'YouTube Video' : 'Spotify Track',
+          title: 'YouTube Video',
           artist: 'Loading...',
           album: null,
           duration: null,
@@ -303,15 +303,9 @@ export default function StationPage({ params }: StationPageProps) {
                     <h3 className="text-xl font-bold">{currentTrack.title}</h3>
                     <p className="text-gray-400">{currentTrack.artist || 'Unknown Artist'}</p>
                     <div className="flex items-center gap-2 mt-2">
-                      {currentTrack.sourceType === 'SPOTIFY' ? (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-[#1db954]/20 text-[#1db954]">
-                          Spotify
-                        </span>
-                      ) : (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/20 text-red-500">
-                          YouTube
-                        </span>
-                      )}
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/20 text-red-500">
+                        YouTube
+                      </span>
                       {currentTrack.duration && (
                         <span className="text-sm text-gray-500">
                           {formatDuration(currentTrack.duration)}
@@ -335,7 +329,7 @@ export default function StationPage({ params }: StationPageProps) {
             <div className="bg-[var(--card-bg)] border border-[var(--border)] rounded-2xl p-6 mb-8">
               <h2 className="text-xl font-bold mb-4">Add Track</h2>
               <p className="text-gray-400 mb-6">
-                Paste a Spotify or YouTube URL to add it to the queue
+                Paste a YouTube URL to add it to the queue
               </p>
               <AddTrackForm onAddTrack={handleAddTrack} isLoading={isAddingTrack} />
             </div>
