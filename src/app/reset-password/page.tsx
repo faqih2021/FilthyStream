@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
+import { getSupabase } from '@/lib/supabase';
 import { Key, Loader2, Check, AlertCircle, ArrowLeft } from 'lucide-react';
 
 export default function ResetPasswordPage() {
@@ -17,7 +17,7 @@ export default function ResetPasswordPage() {
   useEffect(() => {
     // Check if user has a valid session from the reset link
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await getSupabase().auth.getSession();
       setIsValidSession(!!session);
     };
     checkSession();
@@ -40,7 +40,7 @@ export default function ResetPasswordPage() {
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.updateUser({
+      const { error } = await getSupabase().auth.updateUser({
         password: newPassword
       });
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { supabase } from '@/lib/supabase';
+import { getSupabase } from '@/lib/supabase';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
 interface Station {
@@ -32,7 +32,7 @@ export function useRealtimeStations(options: UseRealtimeStationsOptions = {}) {
   // Fetch initial data
   const fetchStations = useCallback(async () => {
     try {
-      const { data, error: fetchError } = await supabase
+      const { data, error: fetchError } = await getSupabase()
         .from('stations')
         .select('*')
         .eq('is_public', true)
@@ -64,7 +64,7 @@ export function useRealtimeStations(options: UseRealtimeStationsOptions = {}) {
     fetchStations();
 
     // Subscribe to realtime changes
-    const channel: RealtimeChannel = supabase
+    const channel: RealtimeChannel = getSupabase()
       .channel('stations-realtime')
       .on(
         'postgres_changes',
@@ -111,7 +111,7 @@ export function useRealtimeStations(options: UseRealtimeStationsOptions = {}) {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      getSupabase().removeChannel(channel);
     };
   }, [fetchStations, limit, orderBy]);
 
@@ -125,7 +125,7 @@ export function useStationPresence(stationId: string | null) {
   useEffect(() => {
     if (!stationId) return;
 
-    const channel = supabase.channel(`station:${stationId}`, {
+    const channel = getSupabase().channel(`station:${stationId}`, {
       config: {
         presence: {
           key: 'listeners'
@@ -150,7 +150,7 @@ export function useStationPresence(stationId: string | null) {
 
     return () => {
       channel.untrack();
-      supabase.removeChannel(channel);
+      getSupabase().removeChannel(channel);
     };
   }, [stationId]);
 
@@ -159,7 +159,7 @@ export function useStationPresence(stationId: string | null) {
 
 async function updateListenerCount(stationId: string, count: number) {
   try {
-    await supabase
+    await getSupabase()
       .from('stations')
       .update({ listener_count: count })
       .eq('id', stationId);

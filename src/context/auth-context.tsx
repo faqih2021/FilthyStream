@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { usePathname } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { getSupabase } from '@/lib/supabase';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 
 interface User {
@@ -43,12 +43,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshUser = useCallback(async () => {
     try {
       // Use getSession first (faster, cached) then getUser for fresh data
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await getSupabase().auth.getSession();
       if (session?.user) {
         setUser(mapSupabaseUser(session.user));
         setLoading(false);
         // Optionally refresh with getUser in background for freshest data
-        supabase.auth.getUser().then(({ data }) => {
+        getSupabase().auth.getUser().then(({ data }) => {
           if (data.user) {
             setUser(mapSupabaseUser(data.user));
           }
@@ -68,7 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refreshUser();
 
     // Listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = getSupabase().auth.onAuthStateChange((event, session) => {
       console.log('Auth state changed:', event);
       if (event === 'SIGNED_OUT') {
         setUser(null);
@@ -110,7 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (identifier: string, password: string) => {
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await getSupabase().auth.signInWithPassword({
         email: identifier.toLowerCase(),
         password,
       });
@@ -132,7 +132,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = async (username: string, email: string, password: string) => {
     try {
-      const { data, error } = await supabase.auth.signUp({
+      const { data, error } = await getSupabase().auth.signUp({
         email: email.toLowerCase(),
         password,
         options: {
@@ -171,7 +171,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     try {
       // Sign out from Supabase client
-      await supabase.auth.signOut();
+      await getSupabase().auth.signOut();
       console.log('Supabase signOut completed');
       
       // Call logout API to clear server-side cookies

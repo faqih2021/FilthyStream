@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Eye, EyeOff, Loader2, Mail, AlertCircle } from 'lucide-react';
 import Image from 'next/image';
-import { supabase } from '@/lib/supabase';
+import { getSupabase } from '@/lib/supabase';
 
 const LOGO_URL = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/logo-etc/filthystream-logo.png`;
 
@@ -41,7 +41,7 @@ export default function LoginPage() {
 
       // Sync session with client-side Supabase
       if (data.session?.accessToken && data.session?.refreshToken) {
-        await supabase.auth.setSession({
+        await getSupabase().auth.setSession({
           access_token: data.session.accessToken,
           refresh_token: data.session.refreshToken,
         });

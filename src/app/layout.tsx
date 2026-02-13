@@ -13,7 +13,8 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const LOGO_URL = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/logo-etc/filthystream-logo.png`;
+// Hardcoded to avoid undefined during prerender (NEXT_PUBLIC_* may not be set at build time)
+const LOGO_URL = 'https://sgtxmsbfcpacrsryhcth.supabase.co/storage/v1/object/public/logo-etc/filthystream-logo.png';
 
 export const metadata: Metadata = {
   title: "FilthyStream - Radio Stream from YouTube",

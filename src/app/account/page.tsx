@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
-import { supabase } from '@/lib/supabase';
+import { getSupabase } from '@/lib/supabase';
 import { 
   User, 
   Mail, 
@@ -106,7 +106,7 @@ export default function AccountPage() {
           // Extract path and remove any query strings
           const oldPath = decodeURIComponent(urlParts[1].split('?')[0]);
           if (oldPath) {
-            const { error: deleteError } = await supabase.storage.from('avatars').remove([oldPath]);
+            const { error: deleteError } = await getSupabase().storage.from('avatars').remove([oldPath]);
             if (deleteError) {
               console.warn('Failed to delete old avatar:', deleteError);
             }
@@ -118,7 +118,7 @@ export default function AccountPage() {
       const fileExt = selectedFile.name.split('.').pop();
       const fileName = `${user.id}-${Date.now()}.${fileExt}`;
       
-      const { error: uploadError } = await supabase.storage
+      const { error: uploadError } = await getSupabase().storage
         .from('avatars')
         .upload(fileName, selectedFile, {
           cacheControl: '3600',
@@ -130,12 +130,12 @@ export default function AccountPage() {
       }
 
       // Get public URL
-      const { data: urlData } = supabase.storage
+      const { data: urlData } = getSupabase().storage
         .from('avatars')
         .getPublicUrl(fileName);
 
       // Update user metadata
-      const { error: updateError } = await supabase.auth.updateUser({
+      const { error: updateError } = await getSupabase().auth.updateUser({
         data: { avatar_url: urlData.publicUrl }
       });
 
@@ -166,7 +166,7 @@ export default function AccountPage() {
       if (urlParts.length > 1) {
         const oldPath = decodeURIComponent(urlParts[1].split('?')[0]);
         if (oldPath) {
-          const { error: deleteError } = await supabase.storage.from('avatars').remove([oldPath]);
+          const { error: deleteError } = await getSupabase().storage.from('avatars').remove([oldPath]);
           if (deleteError) {
             console.warn('Failed to delete avatar from storage:', deleteError);
           }
@@ -174,7 +174,7 @@ export default function AccountPage() {
       }
 
       // Update user metadata
-      const { error } = await supabase.auth.updateUser({
+      const { error } = await getSupabase().auth.updateUser({
         data: { avatar_url: null }
       });
 
@@ -220,7 +220,7 @@ export default function AccountPage() {
     setPasswordLoading(true);
 
     try {
-      const { error } = await supabase.auth.updateUser({
+      const { error } = await getSupabase().auth.updateUser({
         password: newPassword
       });
 
