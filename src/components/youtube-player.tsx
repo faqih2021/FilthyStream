@@ -55,6 +55,7 @@ export function YouTubePlayer() {
   const playerRef = useRef<YTPlayer | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
+  const positionSyncRef = useRef<NodeJS.Timeout | null>(null)
   const [isPlayerReady, setIsPlayerReady] = useState(false)
   // Track the last sourceId we loaded to avoid re-loading same video
   const lastLoadedIdRef = useRef<string | null>(null)
@@ -66,7 +67,9 @@ export function YouTubePlayer() {
     setCurrentTime,
     setDuration,
     setIsPlaying,
-    playNext
+    playNext,
+    resumePosition,
+    setResumePosition
   } = usePlayerStore()
   
   const startTimeTracking = useCallback(() => {
@@ -129,6 +132,9 @@ export function YouTubePlayer() {
       if (intervalRef.current) {
         clearInterval(intervalRef.current)
       }
+      if (positionSyncRef.current) {
+        clearInterval(positionSyncRef.current)
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -182,6 +188,12 @@ export function YouTubePlayer() {
             usePlayerStore.getState().playNext()
           } else if (event.data === window.YT.PlayerState.PLAYING) {
             startTimeTracking()
+            // Check if we need to seek to a resume position
+            const rp = usePlayerStore.getState().resumePosition
+            if (rp && rp > 5 && playerRef.current) {
+              playerRef.current.seekTo(rp, true)
+              usePlayerStore.getState().setResumePosition(null)
+            }
           } else if (event.data === window.YT.PlayerState.PAUSED) {
             stopTimeTracking()
           }
@@ -245,6 +257,38 @@ export function YouTubePlayer() {
       playerRef.current.setVolume(volume * 100)
     }
   }, [volume, isPlayerReady])
+
+  // Periodically sync playback position to DB (every 10s) while playing
+  useEffect(() => {
+    if (positionSyncRef.current) {
+      clearInterval(positionSyncRef.current)
+      positionSyncRef.current = null
+    }
+
+    if (!isPlaying || !isPlayerReady) return
+
+    positionSyncRef.current = setInterval(() => {
+      const stationId = usePlayerStore.getState().currentStationId
+      if (!stationId || !playerRef.current) return
+      try {
+        const pos = playerRef.current.getCurrentTime()
+        if (pos > 0) {
+          fetch(`/api/stations/${stationId}/queue`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'sync-position', position: pos })
+          }).catch(() => {})
+        }
+      } catch { /* player might be destroyed */ }
+    }, 10000)
+
+    return () => {
+      if (positionSyncRef.current) {
+        clearInterval(positionSyncRef.current)
+        positionSyncRef.current = null
+      }
+    }
+  }, [isPlaying, isPlayerReady])
   
   return (
     <div 

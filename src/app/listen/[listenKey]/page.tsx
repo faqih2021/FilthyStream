@@ -13,10 +13,7 @@ import {
   Users,
   Loader2,
   ExternalLink,
-  Copy,
-  Check,
-  Wifi,
-  WifiOff
+  Clock
 } from 'lucide-react'
 import { formatDuration } from '@/lib/url-parser'
 
@@ -88,6 +85,8 @@ interface StationData {
   description: string | null
   imageUrl: string | null
   isLive: boolean
+  liveStartedAt: string | null
+  currentPosition: number
   listenKey: string
   listenerCount: number
   currentTrack: TrackInfo | null
@@ -104,10 +103,10 @@ export default function ListenPage({ params }: ListenPageProps) {
   const [isBuffering, setIsBuffering] = useState(false)
   const [volume, setVolume] = useState(0.8)
   const [isMuted, setIsMuted] = useState(false)
-  const [copied, setCopied] = useState(false)
   const [isConnected, setIsConnected] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
+  const [liveTimer, setLiveTimer] = useState('')
   const prevVolume = useRef(0.8)
 
   // YouTube player refs
@@ -118,10 +117,7 @@ export default function ListenPage({ params }: ListenPageProps) {
   const currentQueueItemRef = useRef<string | null>(null)
   const timeIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const userWantsToPlay = useRef(false)
-  
-  const streamUrl = typeof window !== 'undefined' 
-    ? `${window.location.origin}/api/stream/${listenKey}` 
-    : ''
+  const stationIdRef = useRef<string | null>(null)
   
   // Initialize YouTube IFrame API
   useEffect(() => {
@@ -166,7 +162,16 @@ export default function ListenPage({ params }: ListenPageProps) {
             } else if (event.data === window.YT.PlayerState.ENDED) {
               setIsPlaying(false)
               stopTimeTracking()
-              // Don't auto-advance — let the next poll pick up the DJ's current track
+              // Advance to next track in DB — this makes the radio continue
+              // even if the DJ has closed their browser
+              const sid = stationIdRef.current
+              if (sid) {
+                fetch(`/api/stations/${sid}/queue`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ action: 'play-next' })
+                }).catch(console.error)
+              }
             }
           },
           onError: (event) => {
@@ -231,6 +236,7 @@ export default function ListenPage({ params }: ListenPageProps) {
         if (!response.ok) throw new Error('Station not found')
         const data = await response.json()
         setStation(data.station)
+        stationIdRef.current = data.station.id
         setError(null)
       } catch (err) {
         setError('Station not found or no longer available')
@@ -263,6 +269,15 @@ export default function ListenPage({ params }: ListenPageProps) {
     if (userWantsToPlay.current) {
       playerRef.current.loadVideoById(videoId)
       setIsBuffering(true)
+      // Seek to approximate position after a short delay (need video to start loading first)
+      if (station.currentPosition && station.currentPosition > 5) {
+        const seekPos = station.currentPosition
+        setTimeout(() => {
+          if (playerRef.current) {
+            playerRef.current.seekTo(seekPos, true)
+          }
+        }, 1500)
+      }
     }
 
     if (station.currentTrack.duration) {
@@ -287,6 +302,15 @@ export default function ListenPage({ params }: ListenPageProps) {
       currentQueueItemRef.current = station.currentQueueItemId
       playerRef.current.loadVideoById(videoId)
       setIsBuffering(true)
+      // Seek to approximate current position after loading
+      if (station.currentPosition && station.currentPosition > 5) {
+        const seekPos = station.currentPosition
+        setTimeout(() => {
+          if (playerRef.current) {
+            playerRef.current.seekTo(seekPos, true)
+          }
+        }, 1500)
+      }
     } else {
       playerRef.current.playVideo()
     }
@@ -317,11 +341,30 @@ export default function ListenPage({ params }: ListenPageProps) {
     }
   }
   
-  const handleCopyStreamUrl = () => {
-    navigator.clipboard.writeText(streamUrl)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
+  // Live timer
+  useEffect(() => {
+    if (!station?.isLive || !station?.liveStartedAt) {
+      setLiveTimer('')
+      return
+    }
+    const updateTimer = () => {
+      const elapsed = Date.now() - new Date(station.liveStartedAt!).getTime()
+      const totalSec = Math.floor(elapsed / 1000)
+      const h = Math.floor(totalSec / 3600)
+      const m = Math.floor((totalSec % 3600) / 60)
+      const s = totalSec % 60
+      const remaining = Math.max(0, 6 * 3600 - totalSec)
+      const rh = Math.floor(remaining / 3600)
+      const rm = Math.floor((remaining % 3600) / 60)
+      setLiveTimer(`${h}h ${m.toString().padStart(2, '0')}m ${s.toString().padStart(2, '0')}s on air`)
+      if (remaining <= 0) {
+        setStation(prev => prev ? { ...prev, isLive: false, liveStartedAt: null } : prev)
+      }
+    }
+    updateTimer()
+    const interval = setInterval(updateTimer, 1000)
+    return () => clearInterval(interval)
+  }, [station?.isLive, station?.liveStartedAt])
   
   if (isLoading) {
     return (
@@ -373,11 +416,12 @@ export default function ListenPage({ params }: ListenPageProps) {
               <div className="flex items-center gap-1.5 text-sm text-red-400">
                 <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
                 <span className="font-semibold">ON AIR</span>
+                {liveTimer && <span className="text-red-300/70 text-xs ml-1">· {liveTimer}</span>}
               </div>
             ) : (
-              <div className={`flex items-center gap-1.5 text-sm ${isConnected ? 'text-green-400' : 'text-gray-500'}`}>
-                {isConnected ? <Wifi className="w-4 h-4" /> : <WifiOff className="w-4 h-4" />}
-                <span>{isConnected ? 'Connected' : 'Offline'}</span>
+              <div className="flex items-center gap-1.5 text-sm text-gray-500">
+                <Radio className="w-4 h-4" />
+                <span>Offline</span>
               </div>
             )}
             <div className="flex items-center gap-2 text-sm text-gray-400">
@@ -561,38 +605,6 @@ export default function ListenPage({ params }: ListenPageProps) {
             </div>
           </div>
         )}
-        
-        {/* Stream URL (for VLC etc) */}
-        <div className="bg-[var(--card-bg)] border border-[var(--border)] rounded-2xl p-6 mb-8">
-          <div className="flex items-center gap-2 mb-3">
-            <Radio className="w-5 h-5 text-purple-400" />
-            <h3 className="text-lg font-bold">Stream URL</h3>
-          </div>
-          <p className="text-gray-400 text-sm mb-4">
-            Direct audio stream URL — works in VLC and other audio players (limited on free hosting).
-          </p>
-          <div className="flex items-center gap-2">
-            <div className="flex-1 bg-black/30 border border-[var(--border)] rounded-lg px-4 py-3 font-mono text-sm text-gray-300 truncate">
-              {streamUrl}
-            </div>
-            <button
-              onClick={handleCopyStreamUrl}
-              className="flex items-center gap-2 px-4 py-3 bg-purple-500 hover:bg-purple-600 rounded-lg font-medium whitespace-nowrap transition-colors"
-            >
-              {copied ? (
-                <>
-                  <Check className="w-4 h-4" />
-                  Copied!
-                </>
-              ) : (
-                <>
-                  <Copy className="w-4 h-4" />
-                  Copy
-                </>
-              )}
-            </button>
-          </div>
-        </div>
         
         {/* Create Your Own */}
         <div className="mt-12 text-center">

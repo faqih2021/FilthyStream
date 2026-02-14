@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, use, useCallback } from 'react'
+import { useState, useEffect, use, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import {
@@ -17,7 +17,8 @@ import {
   ExternalLink,
   Pencil,
   X,
-  Podcast
+  Podcast,
+  Clock
 } from 'lucide-react'
 import { AppLayout } from '@/components/app-layout'
 import { AddTrackForm } from '@/components/add-track-form'
@@ -33,18 +34,21 @@ export default function StationPage({ params }: StationPageProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [isAddingTrack, setIsAddingTrack] = useState(false)
   const [copied, setCopied] = useState(false)
-  const [streamCopied, setStreamCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [editingName, setEditingName] = useState(false)
   const [newName, setNewName] = useState('')
   const [addTrackError, setAddTrackError] = useState<string | null>(null)
   const [isTogglingLive, setIsTogglingLive] = useState(false)
+  const [liveTimer, setLiveTimer] = useState('')
+  const hasResumedRef = useRef(false)
   const [station, setStation] = useState<{
     id: string
     name: string
     description: string | null
     imageUrl: string | null
     isLive: boolean
+    liveStartedAt: string | null
+    currentPosition: number
     listenKey: string
     playCount: number
   } | null>(null)
@@ -62,7 +66,8 @@ export default function StationPage({ params }: StationPageProps) {
     setQueue,
     playTrack,
     setCurrentStationId,
-    removeFromQueue
+    removeFromQueue,
+    setResumePosition
   } = usePlayerStore()
   
   const fetchStation = useCallback(async () => {
@@ -87,6 +92,54 @@ export default function StationPage({ params }: StationPageProps) {
     // Don't clear currentStationId on unmount — keep it so DB sync
     // continues working when navigating away while music plays
   }, [id, setCurrentStationId, fetchStation])
+
+  // Auto-resume playback if station is live and we just loaded/refreshed
+  useEffect(() => {
+    if (hasResumedRef.current || !station || !station.isLive) return
+    const playingItem = stationTracks.find(q => q.status === 'PLAYING')
+    if (!playingItem) return
+
+    hasResumedRef.current = true
+    // Set resume position so YouTubePlayer seeks after loading
+    if (station.currentPosition > 5) {
+      setResumePosition(station.currentPosition)
+    }
+    playTrack(playingItem.track)
+    const rest = stationTracks
+      .filter(q => q.status === 'PENDING')
+      .map((item, i) => ({
+        id: item.id,
+        position: i,
+        status: 'PENDING' as const,
+        track: item.track
+      }))
+    setQueue(rest)
+  }, [station, stationTracks, playTrack, setQueue, setResumePosition])
+
+  // Live timer - update every second
+  useEffect(() => {
+    if (!station?.isLive || !station?.liveStartedAt) {
+      setLiveTimer('')
+      return
+    }
+    const updateTimer = () => {
+      const elapsed = Date.now() - new Date(station.liveStartedAt!).getTime()
+      const totalSec = Math.floor(elapsed / 1000)
+      const h = Math.floor(totalSec / 3600)
+      const m = Math.floor((totalSec % 3600) / 60)
+      const s = totalSec % 60
+      const remaining = Math.max(0, 6 * 3600 - totalSec)
+      const rh = Math.floor(remaining / 3600)
+      const rm = Math.floor((remaining % 3600) / 60)
+      setLiveTimer(`${h}h ${m.toString().padStart(2, '0')}m ${s.toString().padStart(2, '0')}s on air \u00B7 ${rh}h ${rm.toString().padStart(2, '0')}m remaining`)
+      if (remaining <= 0) {
+        setStation(prev => prev ? { ...prev, isLive: false, liveStartedAt: null } : prev)
+      }
+    }
+    updateTimer()
+    const interval = setInterval(updateTimer, 1000)
+    return () => clearInterval(interval)
+  }, [station?.isLive, station?.liveStartedAt])
   
   const handlePlayAll = async () => {
     const pending = stationTracks.filter(q => q.status === 'PENDING')
@@ -209,12 +262,6 @@ export default function StationPage({ params }: StationPageProps) {
     navigator.clipboard.writeText(`${window.location.origin}/listen/${station?.listenKey}`)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
-  }
-  
-  const handleCopyStreamUrl = () => {
-    navigator.clipboard.writeText(`${window.location.origin}/api/stream/${station?.listenKey}`)
-    setStreamCopied(true)
-    setTimeout(() => setStreamCopied(false), 2000)
   }
   
   const pendingTracks = stationTracks.filter(item => item.status === 'PENDING')
@@ -406,38 +453,37 @@ export default function StationPage({ params }: StationPageProps) {
           </div>
         </div>
         
-        {/* Stream URL */}
+        {/* Share Link + Live Timer */}
         <div className="bg-[var(--card-bg)] border border-[var(--border)] rounded-2xl p-6 mb-8">
           <div className="flex items-center gap-2 mb-3">
             <Radio className="w-5 h-5 text-purple-400" />
-            <h2 className="text-lg font-bold">Radio Stream URL</h2>
+            <h2 className="text-lg font-bold">Listener Link</h2>
           </div>
           <p className="text-gray-400 text-sm mb-4">
-            Direct audio stream — works in VLC, car radios, and any audio player.
+            Share this link so people can listen to your station live.
           </p>
           <div className="flex items-center gap-2 mb-4">
-            <div className="flex-1 bg-black/30 border border-[var(--border)] rounded-lg px-4 py-3 font-mono text-sm text-gray-300 truncate">
-              {typeof window !== 'undefined' ? window.location.origin : ''}/api/stream/{station.listenKey}
-            </div>
-            <button
-              onClick={handleCopyStreamUrl}
-              className="flex items-center gap-2 px-4 py-3 bg-purple-500 hover:bg-purple-600 rounded-lg font-medium transition-colors flex-shrink-0"
-            >
-              {streamCopied ? <><Check className="w-4 h-4" />Copied!</> : <><Copy className="w-4 h-4" />Copy</>}
-            </button>
-          </div>
-          <p className="text-gray-400 text-sm mb-2">Web player link for listeners:</p>
-          <div className="flex items-center gap-2">
             <div className="flex-1 bg-black/30 border border-[var(--border)] rounded-lg px-4 py-3 font-mono text-sm text-gray-300 truncate">
               {typeof window !== 'undefined' ? window.location.origin : ''}/listen/{station.listenKey}
             </div>
             <button
               onClick={handleCopyLink}
-              className="flex items-center gap-2 px-4 py-3 bg-white/10 hover:bg-white/20 rounded-lg font-medium transition-colors flex-shrink-0"
+              className="flex items-center gap-2 px-4 py-3 bg-purple-500 hover:bg-purple-600 rounded-lg font-medium transition-colors flex-shrink-0"
             >
               {copied ? <><Check className="w-4 h-4" />Copied!</> : <><Copy className="w-4 h-4" />Copy</>}
             </button>
           </div>
+          {station.isLive && liveTimer && (
+            <div className="flex items-center gap-2 text-sm bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3">
+              <Clock className="w-4 h-4 text-red-400 flex-shrink-0" />
+              <span className="text-red-300">{liveTimer}</span>
+            </div>
+          )}
+          {station.isLive && (
+            <p className="text-gray-500 text-xs mt-3">
+              Station will auto go off-air after 6 hours. You can close this page — listeners will keep hearing music.
+            </p>
+          )}
         </div>
         
         {/* Add Track */}

@@ -163,10 +163,10 @@ export async function PATCH(
           })
         }
 
-        // Set station as live
+        // Set station as live with timestamp
         await tx.station.update({
           where: { id: stationId },
-          data: { isLive: true }
+          data: { isLive: true, liveStartedAt: new Date(), currentPosition: 0 }
         })
       })
 
@@ -184,7 +184,16 @@ export async function PATCH(
     if (action === 'go-offline') {
       await prisma.station.update({
         where: { id: stationId },
-        data: { isLive: false }
+        data: { isLive: false, liveStartedAt: null, currentPosition: 0 }
+      })
+      return NextResponse.json({ success: true })
+    }
+
+    // Sync playback position (DJ reports current time periodically)
+    if (action === 'sync-position' && body.position !== undefined) {
+      await prisma.station.update({
+        where: { id: stationId },
+        data: { currentPosition: Math.floor(body.position) }
       })
       return NextResponse.json({ success: true })
     }

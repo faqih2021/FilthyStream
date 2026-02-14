@@ -16,9 +16,11 @@ model Station {
   name          String   @db.VarChar(100)
   description   String?  @db.Text
   imageUrl      String?  @map("image_url") @db.Text
-  isLive        Boolean  @default(false) @map("is_live")
-  isPublic      Boolean  @default(true) @map("is_public")
-  listenKey     String   @unique @default(uuid()) @map("listen_key") @db.Uuid
+  isLive          Boolean   @default(false) @map("is_live")
+  liveStartedAt   DateTime? @map("live_started_at")
+  currentPosition Int       @default(0) @map("current_position") // playback position in seconds
+  isPublic        Boolean   @default(true) @map("is_public")
+  listenKey       String    @unique @default(uuid()) @map("listen_key") @db.Uuid
   playCount     Int      @default(0) @map("play_count")
   listenerCount Int      @default(0) @map("listener_count")
   createdAt     DateTime @default(now()) @map("created_at")

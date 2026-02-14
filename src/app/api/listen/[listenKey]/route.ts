@@ -36,6 +36,21 @@ export async function GET(
         { status: 404 }
       )
     }
+
+    // Auto off-air after 6 hours
+    const SIX_HOURS = 6 * 60 * 60 * 1000
+    if (station.isLive && station.liveStartedAt) {
+      const elapsed = Date.now() - new Date(station.liveStartedAt).getTime()
+      if (elapsed > SIX_HOURS) {
+        await prisma.station.update({
+          where: { id: station.id },
+          data: { isLive: false, liveStartedAt: null, currentPosition: 0 }
+        })
+        station.isLive = false
+        station.liveStartedAt = null
+        station.currentPosition = 0
+      }
+    }
     
     // Only increment play count on first load, not on polls
     if (poll !== 'true') {
@@ -58,6 +73,8 @@ export async function GET(
         description: station.description,
         imageUrl: station.imageUrl,
         isLive: station.isLive,
+        liveStartedAt: station.liveStartedAt,
+        currentPosition: station.currentPosition,
         listenKey: station.listenKey,
         listenerCount: station.listenerCount,
         currentTrack: playingItem?.track || (pendingTracks.length > 0 ? pendingTracks[0].track : null),

@@ -32,6 +32,7 @@ interface PlayerState {
   
   // Station
   currentStationId: string | null
+  resumePosition: number | null // position to seek to after loading a track (resume on refresh)
   
   // Actions
   setCurrentTrack: (track: Track | null) => void
@@ -48,6 +49,7 @@ interface PlayerState {
   playPrevious: () => void
   playTrack: (track: Track) => void
   setCurrentStationId: (stationId: string | null) => void
+  setResumePosition: (position: number | null) => void
 }
 
 export const usePlayerStore = create<PlayerState>((set, get) => ({
@@ -59,6 +61,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   volume: 0.8,
   queue: [],
   currentStationId: null,
+  resumePosition: null,
   
   // Actions
   setCurrentTrack: (track) => set({ currentTrack: track }),
@@ -144,5 +147,6 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     currentTime: 0
   }),
   
-  setCurrentStationId: (stationId) => set({ currentStationId: stationId })
+  setCurrentStationId: (stationId) => set({ currentStationId: stationId }),
+  setResumePosition: (position) => set({ resumePosition: position })
 }))
