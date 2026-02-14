@@ -86,6 +86,17 @@ export async function POST(
           imageUrl: trackData.imageUrl
         }
       })
+
+      // Check for duplicate: same track already in this station's queue
+      const existing = await prisma.queueItem.findFirst({
+        where: { stationId, trackId: track.id }
+      })
+      if (existing) {
+        return NextResponse.json(
+          { error: 'Track already in queue' },
+          { status: 409 }
+        )
+      }
     } else {
       return NextResponse.json(
         { error: 'Either trackId or trackData is required' },
@@ -129,6 +140,80 @@ export async function PATCH(
     const body = await request.json()
     const { itemId, newPosition, action } = body
     
+    // Go On Air: reset all items to PENDING, mark first as PLAYING, set station live
+    if (action === 'go-live') {
+      await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+        // Reset all queue items to PENDING
+        await tx.queueItem.updateMany({
+          where: { stationId },
+          data: { status: 'PENDING' }
+        })
+
+        // Mark first item as PLAYING
+        const firstItem = await tx.queueItem.findFirst({
+          where: { stationId, status: 'PENDING' },
+          orderBy: { position: 'asc' },
+          include: { track: true }
+        })
+
+        if (firstItem) {
+          await tx.queueItem.update({
+            where: { id: firstItem.id },
+            data: { status: 'PLAYING' }
+          })
+        }
+
+        // Set station as live
+        await tx.station.update({
+          where: { id: stationId },
+          data: { isLive: true }
+        })
+      })
+
+      // Get updated queue to return
+      const updatedQueue = await prisma.queueItem.findMany({
+        where: { stationId },
+        include: { track: true },
+        orderBy: { position: 'asc' }
+      })
+
+      return NextResponse.json({ success: true, queue: updatedQueue })
+    }
+
+    // Go Off Air: set station offline
+    if (action === 'go-offline') {
+      await prisma.station.update({
+        where: { id: stationId },
+        data: { isLive: false }
+      })
+      return NextResponse.json({ success: true })
+    }
+
+    // Sync current playing track (called from client when a specific track starts)
+    if (action === 'sync-playing' && itemId) {
+      await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+        // Mark ALL items before this one as PLAYED, this one as PLAYING, rest stay PENDING
+        const allItems = await tx.queueItem.findMany({
+          where: { stationId },
+          orderBy: { position: 'asc' }
+        })
+
+        const targetIndex = allItems.findIndex(i => i.id === itemId)
+        if (targetIndex === -1) return
+
+        for (let i = 0; i < allItems.length; i++) {
+          const newStatus = i < targetIndex ? 'PLAYED' : i === targetIndex ? 'PLAYING' : 'PENDING'
+          if (allItems[i].status !== newStatus) {
+            await tx.queueItem.update({
+              where: { id: allItems[i].id },
+              data: { status: newStatus }
+            })
+          }
+        }
+      })
+      return NextResponse.json({ success: true })
+    }
+
     if (action === 'play-next') {
       // Mark current playing as played, and set next as playing
       await prisma.$transaction(async (tx: Prisma.TransactionClient) => {

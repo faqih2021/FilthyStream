@@ -16,7 +16,8 @@ import {
   Trash2,
   ExternalLink,
   Pencil,
-  X
+  X,
+  Podcast
 } from 'lucide-react'
 import { AppLayout } from '@/components/app-layout'
 import { AddTrackForm } from '@/components/add-track-form'
@@ -36,6 +37,8 @@ export default function StationPage({ params }: StationPageProps) {
   const [error, setError] = useState<string | null>(null)
   const [editingName, setEditingName] = useState(false)
   const [newName, setNewName] = useState('')
+  const [addTrackError, setAddTrackError] = useState<string | null>(null)
+  const [isTogglingLive, setIsTogglingLive] = useState(false)
   const [station, setStation] = useState<{
     id: string
     name: string
@@ -84,11 +87,20 @@ export default function StationPage({ params }: StationPageProps) {
     return () => { setCurrentStationId(null) }
   }, [id, setCurrentStationId, fetchStation])
   
-  const handlePlayAll = () => {
+  const handlePlayAll = async () => {
     const pending = stationTracks.filter(q => q.status === 'PENDING')
     if (pending.length === 0) return
     
     playTrack(pending[0].track)
+    
+    // Sync to DB: mark first track as PLAYING
+    try {
+      await fetch(`/api/stations/${id}/queue`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'sync-playing', itemId: pending[0].id })
+      })
+    } catch (e) { console.error('Failed to sync play state:', e) }
     
     const rest = pending.slice(1).map((item, i) => ({
       id: item.id,
@@ -101,6 +113,7 @@ export default function StationPage({ params }: StationPageProps) {
   
   const handleAddTrack = async (url: string) => {
     setIsAddingTrack(true)
+    setAddTrackError(null)
     try {
       const response = await fetch('/api/tracks', {
         method: 'POST',
@@ -144,11 +157,17 @@ export default function StationPage({ params }: StationPageProps) {
         body: JSON.stringify({ trackData })
       })
       
+      if (queueResponse.status === 409) {
+        setAddTrackError('Track is already in the queue!')
+        return
+      }
+      
       if (queueResponse.ok) {
         await fetchStation()
       }
     } catch (error) {
       console.error('Failed to add track:', error)
+      setAddTrackError('Failed to add track')
     } finally {
       setIsAddingTrack(false)
     }
@@ -198,7 +217,63 @@ export default function StationPage({ params }: StationPageProps) {
   }
   
   const pendingTracks = stationTracks.filter(item => item.status === 'PENDING')
-  
+
+  const handleGoLive = async () => {
+    if (!station || stationTracks.length === 0) return
+    setIsTogglingLive(true)
+    try {
+      const res = await fetch(`/api/stations/${id}/queue`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'go-live' })
+      })
+      if (!res.ok) throw new Error('Failed to go live')
+      const data = await res.json()
+      
+      // Update local state
+      setStation({ ...station, isLive: true })
+      setStationTracks(data.queue)
+      
+      // Start playing from first track
+      const firstPlaying = data.queue.find((q: { status: string }) => q.status === 'PLAYING')
+      if (firstPlaying) {
+        playTrack(firstPlaying.track)
+        const rest = data.queue
+          .filter((q: { status: string }) => q.status === 'PENDING')
+          .map((item: { id: string; track: Track }, i: number) => ({
+            id: item.id,
+            position: i,
+            status: 'PENDING' as const,
+            track: item.track
+          }))
+        setQueue(rest)
+      }
+    } catch (error) {
+      console.error('Failed to go live:', error)
+    } finally {
+      setIsTogglingLive(false)
+    }
+  }
+
+  const handleGoOffline = async () => {
+    if (!station) return
+    setIsTogglingLive(true)
+    try {
+      const res = await fetch(`/api/stations/${id}/queue`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'go-offline' })
+      })
+      if (res.ok) {
+        setStation({ ...station, isLive: false })
+      }
+    } catch (error) {
+      console.error('Failed to go offline:', error)
+    } finally {
+      setIsTogglingLive(false)
+    }
+  }
+
   if (isLoading) {
     return (
       <AppLayout>
@@ -295,6 +370,26 @@ export default function StationPage({ params }: StationPageProps) {
                 Play All ({pendingTracks.length})
               </button>
               
+              {station.isLive ? (
+                <button
+                  onClick={handleGoOffline}
+                  disabled={isTogglingLive}
+                  className="flex items-center gap-2 px-6 py-3 bg-red-500 hover:bg-red-600 rounded-full font-semibold transition-colors disabled:opacity-50"
+                >
+                  {isTogglingLive ? <Loader2 className="w-5 h-5 animate-spin" /> : <Podcast className="w-5 h-5" />}
+                  Go Offline
+                </button>
+              ) : (
+                <button
+                  onClick={handleGoLive}
+                  disabled={isTogglingLive || stationTracks.length === 0}
+                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-red-500 to-orange-500 rounded-full font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
+                >
+                  {isTogglingLive ? <Loader2 className="w-5 h-5 animate-spin" /> : <Podcast className="w-5 h-5" />}
+                  Go On Air
+                </button>
+              )}
+              
               <button
                 onClick={handleCopyLink}
                 className="flex items-center gap-2 px-4 py-3 border border-[var(--border)] rounded-full font-medium hover:bg-white/5 transition-colors"
@@ -349,6 +444,12 @@ export default function StationPage({ params }: StationPageProps) {
           <h2 className="text-xl font-bold mb-2">Add Track</h2>
           <p className="text-gray-400 mb-4 text-sm">Paste a YouTube URL to add it to this station</p>
           <AddTrackForm onAddTrack={handleAddTrack} isLoading={isAddingTrack} />
+          {addTrackError && (
+            <div className="mt-3 flex items-center gap-2 text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-2">
+              <X className="w-4 h-4 flex-shrink-0" />
+              {addTrackError}
+            </div>
+          )}
         </div>
         
         {/* Track List */}
@@ -411,6 +512,12 @@ export default function StationPage({ params }: StationPageProps) {
                             setIsPlaying(false)
                           } else {
                             playTrack(item.track)
+                            // Sync to DB
+                            fetch(`/api/stations/${id}/queue`, {
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ action: 'sync-playing', itemId: item.id })
+                            }).catch(console.error)
                           }
                         }}
                         className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors"

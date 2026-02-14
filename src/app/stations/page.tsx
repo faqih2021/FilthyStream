@@ -197,7 +197,15 @@ export default function StationsPage() {
                         </button>
                       </div>
                     ) : (
-                      <h3 className="text-xl font-bold truncate">{station.name}</h3>
+                      <h3 className="text-xl font-bold truncate">
+                        {station.name}
+                        {station.isLive && (
+                          <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 bg-red-500 text-white text-xs font-bold rounded-full align-middle">
+                            <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+                            LIVE
+                          </span>
+                        )}
+                      </h3>
                     )}
                     {station.description && (
                       <p className="text-sm text-gray-400 truncate">{station.description}</p>

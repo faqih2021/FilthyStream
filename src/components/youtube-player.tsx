@@ -143,6 +143,15 @@ export function YouTubePlayer() {
         onStateChange: (event) => {
           if (event.data === window.YT.PlayerState.ENDED) {
             stopTimeTracking()
+            // Sync DB before advancing local queue
+            const stationId = usePlayerStore.getState().currentStationId
+            if (stationId) {
+              fetch(`/api/stations/${stationId}/queue`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'play-next' })
+              }).catch(console.error)
+            }
             usePlayerStore.getState().playNext()
           } else if (event.data === window.YT.PlayerState.PLAYING) {
             startTimeTracking()
@@ -152,6 +161,14 @@ export function YouTubePlayer() {
         },
         onError: (event) => {
           console.error('YouTube Player Error:', event.data)
+          const stationId = usePlayerStore.getState().currentStationId
+          if (stationId) {
+            fetch(`/api/stations/${stationId}/queue`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'play-next' })
+            }).catch(console.error)
+          }
           usePlayerStore.getState().playNext()
         }
       }
