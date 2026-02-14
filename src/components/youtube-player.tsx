@@ -47,6 +47,10 @@ interface YTPlayer {
   destroy: () => void
 }
 
+// Global singleton guard — only one YouTubePlayer instance should exist
+let globalPlayerInstance: YTPlayer | null = null
+let globalPlayerMounted = false
+
 export function YouTubePlayer() {
   const playerRef = useRef<YTPlayer | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -88,6 +92,20 @@ export function YouTubePlayer() {
   
   // Load YouTube IFrame API
   useEffect(() => {
+    // Singleton guard: if another instance is already mounted, skip
+    if (globalPlayerMounted && globalPlayerInstance) {
+      playerRef.current = globalPlayerInstance
+      setIsPlayerReady(true)
+      // Sync lastLoadedIdRef with whatever is currently playing
+      const currentTrack = usePlayerStore.getState().currentTrack
+      if (currentTrack) {
+        lastLoadedIdRef.current = currentTrack.sourceId
+      }
+      return
+    }
+    
+    globalPlayerMounted = true
+    
     if (typeof window !== 'undefined' && !window.YT) {
       const tag = document.createElement('script')
       tag.src = 'https://www.youtube.com/iframe_api'
@@ -102,8 +120,11 @@ export function YouTubePlayer() {
     }
     
     return () => {
+      globalPlayerMounted = false
+      globalPlayerInstance = null
       if (playerRef.current) {
         playerRef.current.destroy()
+        playerRef.current = null
       }
       if (intervalRef.current) {
         clearInterval(intervalRef.current)
@@ -137,8 +158,14 @@ export function YouTubePlayer() {
       },
       events: {
         onReady: (event) => {
+          globalPlayerInstance = playerRef.current
           setIsPlayerReady(true)
           event.target.setVolume(usePlayerStore.getState().volume * 100)
+          // Sync lastLoadedIdRef with current track on ready (in case of re-init)
+          const track = usePlayerStore.getState().currentTrack
+          if (track) {
+            lastLoadedIdRef.current = track.sourceId
+          }
         },
         onStateChange: (event) => {
           if (event.data === window.YT.PlayerState.ENDED) {

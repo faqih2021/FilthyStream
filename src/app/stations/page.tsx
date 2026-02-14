@@ -29,7 +29,7 @@ interface StationData {
 
 export default function StationsPage() {
   const { user, loading: authLoading } = useAuth()
-  const { playTrack, setQueue, addToQueue } = usePlayerStore()
+  const { playTrack, setQueue, addToQueue, setCurrentStationId } = usePlayerStore()
   const [myStations, setMyStations] = useState<StationData[]>([])
   const [loading, setLoading] = useState(true)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -65,8 +65,18 @@ export default function StationsPage() {
     
     if (tracks.length === 0) return
     
+    // Set station context for DB sync
+    setCurrentStationId(station.id)
+    
     // Play the first track
     playTrack(tracks[0].track)
+    
+    // Sync to DB
+    fetch(`/api/stations/${station.id}/queue`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'sync-playing', itemId: tracks[0].id })
+    }).catch(console.error)
     
     // Set remaining as queue
     const queueItems = tracks.slice(1).map((item, index) => ({

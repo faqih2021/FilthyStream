@@ -84,7 +84,8 @@ export default function StationPage({ params }: StationPageProps) {
   useEffect(() => {
     fetchStation()
     setCurrentStationId(id)
-    return () => { setCurrentStationId(null) }
+    // Don't clear currentStationId on unmount — keep it so DB sync
+    // continues working when navigating away while music plays
   }, [id, setCurrentStationId, fetchStation])
   
   const handlePlayAll = async () => {

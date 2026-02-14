@@ -9,7 +9,6 @@ import { useAuth } from '@/context/auth-context'
 
 const LOGO_URL = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/logo-etc/filthystream-logo.png`
 import { Player } from './player'
-import { YouTubePlayer } from './youtube-player'
 import { Queue } from './queue'
 
 interface AppLayoutProps {
@@ -143,9 +142,6 @@ export function AppLayout({ children }: AppLayoutProps) {
         
         {/* Player Footer */}
         <Player />
-        
-        {/* Hidden YouTube Player */}
-        <YouTubePlayer />
       </div>
     </div>
   )
