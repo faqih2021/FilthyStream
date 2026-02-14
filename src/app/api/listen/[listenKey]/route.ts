@@ -8,6 +8,8 @@ export async function GET(
 ) {
   try {
     const { listenKey } = await params
+    const { searchParams } = new URL(request.url)
+    const poll = searchParams.get('poll') // If 'true', skip incrementing playCount
     
     const station = await prisma.station.findUnique({
       where: { listenKey },
@@ -35,16 +37,18 @@ export async function GET(
       )
     }
     
-    // Increment play count
-    await prisma.station.update({
-      where: { id: station.id },
-      data: {
-        playCount: { increment: 1 }
-      }
-    })
+    // Only increment play count on first load, not on polls
+    if (poll !== 'true') {
+      await prisma.station.update({
+        where: { id: station.id },
+        data: {
+          playCount: { increment: 1 }
+        }
+      })
+    }
     
-    // Return station info (hide sensitive data)
-    const playingTrack = station.queue.find(q => q.status === 'PLAYING')?.track
+    // Return station info
+    const playingItem = station.queue.find(q => q.status === 'PLAYING')
     const pendingTracks = station.queue.filter(q => q.status === 'PENDING')
     
     return NextResponse.json({
@@ -56,9 +60,9 @@ export async function GET(
         isLive: station.isLive,
         listenKey: station.listenKey,
         listenerCount: station.listenerCount,
-        // If nothing is playing, use first pending track
-        currentTrack: playingTrack || (pendingTracks.length > 0 ? pendingTracks[0].track : null),
-        upNext: playingTrack 
+        currentTrack: playingItem?.track || (pendingTracks.length > 0 ? pendingTracks[0].track : null),
+        currentQueueItemId: playingItem?.id || (pendingTracks.length > 0 ? pendingTracks[0].id : null),
+        upNext: playingItem 
           ? pendingTracks.slice(0, 5).map(q => q.track)
           : pendingTracks.slice(1, 6).map(q => q.track)
       }

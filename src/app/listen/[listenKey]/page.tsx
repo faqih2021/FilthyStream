@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, use } from 'react'
+import { useState, useEffect, useRef, use, useCallback } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import {
@@ -21,6 +21,50 @@ import {
 import { formatDuration } from '@/lib/url-parser'
 
 const LOGO_URL = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/logo-etc/filthystream-logo.png`
+
+declare global {
+  interface Window {
+    YT: {
+      Player: new (
+        elementId: string,
+        config: {
+          height: string
+          width: string
+          videoId: string
+          playerVars?: Record<string, number | string>
+          events?: {
+            onReady?: (event: { target: ListenerYTPlayer }) => void
+            onStateChange?: (event: { data: number }) => void
+            onError?: (event: { data: number }) => void
+          }
+        }
+      ) => ListenerYTPlayer
+      PlayerState: {
+        ENDED: number
+        PLAYING: number
+        PAUSED: number
+        BUFFERING: number
+        CUED: number
+      }
+    }
+    onYouTubeIframeAPIReady: () => void
+  }
+}
+
+interface ListenerYTPlayer {
+  playVideo: () => void
+  pauseVideo: () => void
+  stopVideo: () => void
+  seekTo: (seconds: number, allowSeekAhead: boolean) => void
+  setVolume: (volume: number) => void
+  getVolume: () => number
+  getCurrentTime: () => number
+  getDuration: () => number
+  getPlayerState: () => number
+  loadVideoById: (videoId: string) => void
+  cueVideoById: (videoId: string) => void
+  destroy: () => void
+}
 
 interface ListenPageProps {
   params: Promise<{ listenKey: string }>
@@ -47,6 +91,7 @@ interface StationData {
   listenKey: string
   listenerCount: number
   currentTrack: TrackInfo | null
+  currentQueueItemId: string | null
   upNext: TrackInfo[]
 }
 
@@ -61,18 +106,128 @@ export default function ListenPage({ params }: ListenPageProps) {
   const [isMuted, setIsMuted] = useState(false)
   const [copied, setCopied] = useState(false)
   const [isConnected, setIsConnected] = useState(false)
-  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
   const prevVolume = useRef(0.8)
+
+  // YouTube player refs
+  const playerRef = useRef<ListenerYTPlayer | null>(null)
+  const playerContainerRef = useRef<HTMLDivElement>(null)
+  const [isPlayerReady, setIsPlayerReady] = useState(false)
+  const lastLoadedVideoRef = useRef<string | null>(null)
+  const currentQueueItemRef = useRef<string | null>(null)
+  const timeIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const userWantsToPlay = useRef(false)
   
   const streamUrl = typeof window !== 'undefined' 
     ? `${window.location.origin}/api/stream/${listenKey}` 
     : ''
   
-  // Fetch station info
+  // Initialize YouTube IFrame API
   useEffect(() => {
-    const fetchStation = async () => {
+    const initPlayer = () => {
+      if (!playerContainerRef.current || playerRef.current) return
+
+      const playerId = 'listener-yt-player-' + Date.now()
+      const playerDiv = document.createElement('div')
+      playerDiv.id = playerId
+      playerContainerRef.current.appendChild(playerDiv)
+
+      playerRef.current = new window.YT.Player(playerId, {
+        height: '0',
+        width: '0',
+        videoId: '',
+        playerVars: {
+          autoplay: 0,
+          controls: 0,
+          disablekb: 1,
+          enablejsapi: 1,
+          fs: 0,
+          iv_load_policy: 3,
+          modestbranding: 1,
+          origin: window.location.origin,
+          rel: 0
+        },
+        events: {
+          onReady: () => {
+            setIsPlayerReady(true)
+          },
+          onStateChange: (event) => {
+            if (event.data === window.YT.PlayerState.PLAYING) {
+              setIsPlaying(true)
+              setIsBuffering(false)
+              setIsConnected(true)
+              startTimeTracking()
+            } else if (event.data === window.YT.PlayerState.PAUSED) {
+              setIsPlaying(false)
+              stopTimeTracking()
+            } else if (event.data === window.YT.PlayerState.BUFFERING) {
+              setIsBuffering(true)
+            } else if (event.data === window.YT.PlayerState.ENDED) {
+              setIsPlaying(false)
+              stopTimeTracking()
+              // Don't auto-advance — let the next poll pick up the DJ's current track
+            }
+          },
+          onError: (event) => {
+            console.error('Listener YT error:', event.data)
+            setIsBuffering(false)
+          }
+        }
+      }) as unknown as ListenerYTPlayer
+    }
+
+    if (typeof window !== 'undefined' && window.YT && window.YT.Player) {
+      initPlayer()
+    } else if (typeof window !== 'undefined' && !window.YT) {
+      const tag = document.createElement('script')
+      tag.src = 'https://www.youtube.com/iframe_api'
+      const firstScriptTag = document.getElementsByTagName('script')[0]
+      firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag)
+
+      const prev = window.onYouTubeIframeAPIReady
+      window.onYouTubeIframeAPIReady = () => {
+        if (prev) prev()
+        initPlayer()
+      }
+    }
+
+    return () => {
+      if (playerRef.current) {
+        playerRef.current.destroy()
+        playerRef.current = null
+      }
+      stopTimeTracking()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const startTimeTracking = useCallback(() => {
+    if (timeIntervalRef.current) return
+    timeIntervalRef.current = setInterval(() => {
+      if (playerRef.current) {
+        try {
+          setCurrentTime(Math.floor(playerRef.current.getCurrentTime()))
+          const dur = playerRef.current.getDuration()
+          if (dur > 0) setDuration(Math.floor(dur))
+        } catch { /* player might be destroyed */ }
+      }
+    }, 1000)
+  }, [])
+
+  const stopTimeTracking = useCallback(() => {
+    if (timeIntervalRef.current) {
+      clearInterval(timeIntervalRef.current)
+      timeIntervalRef.current = null
+    }
+  }, [])
+  
+  // Fetch station info + poll
+  useEffect(() => {
+    const fetchStation = async (isPoll: boolean) => {
       try {
-        const response = await fetch(`/api/listen/${listenKey}`)
+        const url = `/api/listen/${listenKey}${isPoll ? '?poll=true' : ''}`
+        const response = await fetch(url)
         if (!response.ok) throw new Error('Station not found')
         const data = await response.json()
         setStation(data.station)
@@ -81,85 +236,66 @@ export default function ListenPage({ params }: ListenPageProps) {
         setError('Station not found or no longer available')
         console.error('Error fetching station:', err)
       } finally {
-        setIsLoading(false)
+        if (!isPoll) setIsLoading(false)
       }
     }
     
-    fetchStation()
-    // Poll for track info updates
-    const interval = setInterval(fetchStation, 15000)
+    fetchStation(false)
+    const interval = setInterval(() => fetchStation(true), 5000)
     return () => clearInterval(interval)
   }, [listenKey])
-  
-  // Setup audio element
+
+  // When station data updates and track changes, load new video
   useEffect(() => {
-    if (!streamUrl) return
-    
-    const audio = new Audio()
-    audio.crossOrigin = 'anonymous'
-    audioRef.current = audio
-    
-    audio.addEventListener('playing', () => {
-      setIsPlaying(true)
-      setIsBuffering(false)
-      setIsConnected(true)
-    })
-    
-    audio.addEventListener('pause', () => {
-      setIsPlaying(false)
-    })
-    
-    audio.addEventListener('waiting', () => {
+    if (!isPlayerReady || !playerRef.current || !station) return
+    if (!station.currentTrack || station.currentTrack.sourceType !== 'YOUTUBE') return
+
+    const videoId = station.currentTrack.sourceId
+    const queueItemId = station.currentQueueItemId
+
+    // Track hasn't changed — nothing to do
+    if (lastLoadedVideoRef.current === videoId && currentQueueItemRef.current === queueItemId) return
+
+    lastLoadedVideoRef.current = videoId
+    currentQueueItemRef.current = queueItemId
+
+    // If user has started playback (clicked play), auto-load new tracks
+    if (userWantsToPlay.current) {
+      playerRef.current.loadVideoById(videoId)
       setIsBuffering(true)
-    })
-    
-    audio.addEventListener('error', () => {
-      setIsConnected(false)
-      setIsPlaying(false)
-      setIsBuffering(false)
-    })
-    
-    audio.addEventListener('ended', () => {
-      setIsConnected(false)
-      setIsPlaying(false)
-      // Auto reconnect after a short delay (next track may be starting)
-      setTimeout(() => {
-        handlePlay()
-      }, 2000)
-    })
-    
-    return () => {
-      audio.pause()
-      audio.src = ''
-      audioRef.current = null
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [streamUrl])
+
+    if (station.currentTrack.duration) {
+      setDuration(station.currentTrack.duration)
+    }
+  }, [station?.currentTrack?.sourceId, station?.currentQueueItemId, isPlayerReady])
   
-  // Volume control
+  // Handle volume changes
   useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.volume = volume
+    if (isPlayerReady && playerRef.current) {
+      playerRef.current.setVolume(volume * 100)
     }
-  }, [volume])
+  }, [volume, isPlayerReady])
   
   const handlePlay = () => {
-    if (!audioRef.current || !streamUrl) return
-    
-    setIsBuffering(true)
-    // Add timestamp to prevent caching
-    audioRef.current.src = `${streamUrl}?t=${Date.now()}`
-    audioRef.current.play().catch((err: unknown) => {
-      console.error('Play error:', err)
-      setIsBuffering(false)
-    })
+    if (!playerRef.current || !station?.currentTrack) return
+    userWantsToPlay.current = true
+
+    const videoId = station.currentTrack.sourceId
+    if (lastLoadedVideoRef.current !== videoId || !isPlaying) {
+      lastLoadedVideoRef.current = videoId
+      currentQueueItemRef.current = station.currentQueueItemId
+      playerRef.current.loadVideoById(videoId)
+      setIsBuffering(true)
+    } else {
+      playerRef.current.playVideo()
+    }
   }
   
   const handlePause = () => {
-    if (!audioRef.current) return
-    audioRef.current.pause()
-    audioRef.current.src = ''
-    setIsConnected(false)
+    if (!playerRef.current) return
+    playerRef.current.pauseVideo()
+    userWantsToPlay.current = false
   }
   
   const togglePlay = () => {
@@ -216,6 +352,13 @@ export default function ListenPage({ params }: ListenPageProps) {
   
   return (
     <div className="min-h-screen bg-[var(--background)]">
+      {/* Hidden YouTube Player for audio */}
+      <div
+        ref={playerContainerRef}
+        className="fixed -left-[9999px] -top-[9999px] w-0 h-0 overflow-hidden"
+        aria-hidden="true"
+      />
+
       {/* Header */}
       <header className="border-b border-[var(--border)] bg-[var(--card-bg)] px-6 py-4">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
@@ -225,11 +368,18 @@ export default function ListenPage({ params }: ListenPageProps) {
           </Link>
           
           <div className="flex items-center gap-4">
-            {/* Connection Status */}
-            <div className={`flex items-center gap-1.5 text-sm ${isConnected ? 'text-green-400' : 'text-gray-500'}`}>
-              {isConnected ? <Wifi className="w-4 h-4" /> : <WifiOff className="w-4 h-4" />}
-              <span>{isConnected ? 'Connected' : 'Disconnected'}</span>
-            </div>
+            {/* Live / Connection Status */}
+            {station.isLive ? (
+              <div className="flex items-center gap-1.5 text-sm text-red-400">
+                <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                <span className="font-semibold">ON AIR</span>
+              </div>
+            ) : (
+              <div className={`flex items-center gap-1.5 text-sm ${isConnected ? 'text-green-400' : 'text-gray-500'}`}>
+                {isConnected ? <Wifi className="w-4 h-4" /> : <WifiOff className="w-4 h-4" />}
+                <span>{isConnected ? 'Connected' : 'Offline'}</span>
+              </div>
+            )}
             <div className="flex items-center gap-2 text-sm text-gray-400">
               <Users className="w-4 h-4" />
               <span>{station.listenerCount} listening</span>
@@ -256,6 +406,12 @@ export default function ListenPage({ params }: ListenPageProps) {
                 <Radio className={`w-20 h-20 text-white/50 ${isPlaying ? 'animate-pulse' : ''}`} />
               </div>
             )}
+            {station.isLive && (
+              <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2 py-1 bg-red-500 text-white text-xs font-bold rounded-full">
+                <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+                LIVE
+              </div>
+            )}
             {isPlaying && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/30">
                 <div className="flex items-end gap-1 h-8">
@@ -277,7 +433,7 @@ export default function ListenPage({ params }: ListenPageProps) {
           <div className="flex flex-col items-center gap-6">
             <button
               onClick={togglePlay}
-              disabled={isBuffering}
+              disabled={isBuffering || !station.currentTrack}
               className="w-20 h-20 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center hover:scale-105 active:scale-95 transition-transform shadow-xl shadow-purple-500/30 disabled:opacity-70"
             >
               {isBuffering ? (
@@ -288,6 +444,26 @@ export default function ListenPage({ params }: ListenPageProps) {
                 <Play className="w-8 h-8 text-white ml-1" />
               )}
             </button>
+
+            {!station.currentTrack && !station.isLive && (
+              <p className="text-gray-500 text-sm">Station is offline — no tracks playing</p>
+            )}
+            
+            {/* Progress bar */}
+            {isPlaying && duration > 0 && (
+              <div className="w-full max-w-xs">
+                <div className="w-full h-1 bg-gray-700 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full transition-all duration-1000"
+                    style={{ width: `${Math.min((currentTime / duration) * 100, 100)}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-xs text-gray-500 mt-1">
+                  <span>{formatDuration(currentTime)}</span>
+                  <span>{formatDuration(duration)}</span>
+                </div>
+              </div>
+            )}
             
             {/* Volume */}
             <div className="flex items-center gap-3">
@@ -386,14 +562,14 @@ export default function ListenPage({ params }: ListenPageProps) {
           </div>
         )}
         
-        {/* Stream URL */}
+        {/* Stream URL (for VLC etc) */}
         <div className="bg-[var(--card-bg)] border border-[var(--border)] rounded-2xl p-6 mb-8">
           <div className="flex items-center gap-2 mb-3">
             <Radio className="w-5 h-5 text-purple-400" />
             <h3 className="text-lg font-bold">Stream URL</h3>
           </div>
           <p className="text-gray-400 text-sm mb-4">
-            Use this URL in VLC, car radios, or any audio player to listen
+            Direct audio stream URL — works in VLC and other audio players (limited on free hosting).
           </p>
           <div className="flex items-center gap-2">
             <div className="flex-1 bg-black/30 border border-[var(--border)] rounded-lg px-4 py-3 font-mono text-sm text-gray-300 truncate">
