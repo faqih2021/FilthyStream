@@ -81,7 +81,7 @@ export default function Home() {
                 <span className="gradient-text">YouTube</span>
               </h1>
               <p className="text-xl text-gray-300 mb-8 max-w-xl">
-                Create your own radio station by combining YouTube playlists.
+                Create your own radio station with YouTube music.
                 No uploads needed - just paste the links.
               </p>
               <div className="flex gap-4">
@@ -96,7 +96,7 @@ export default function Home() {
                   href="/stations"
                   className="inline-flex items-center gap-2 px-6 py-3 bg-white/10 text-white font-semibold rounded-full hover:bg-white/20 transition-colors"
                 >
-                  Explore Stations
+                  My Stations
                 </Link>
               </div>
             </div>
@@ -126,7 +126,7 @@ export default function Home() {
               </div>
               <h3 className="font-bold text-lg mb-2">Build Your Queue</h3>
               <p className="text-gray-400">
-                Add tracks, reorder them, and create your perfect playlist
+                Add tracks to your station and build the perfect lineup
               </p>
             </div>
             <div className="bg-[var(--card-bg)] border border-[var(--border)] rounded-2xl p-6">

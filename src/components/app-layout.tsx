@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Globe, Music, Zap, ArrowRight, Loader2, Home, ListMusic, ChevronRight, ChevronLeft } from 'lucide-react'
+import { Globe, Radio, Zap, ArrowRight, Loader2, Home, ListMusic, ChevronRight, ChevronLeft } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -23,8 +23,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   
   const navItems = [
     { href: '/', icon: Home, label: 'Home' },
-    { href: '/stations', icon: Globe, label: 'Explore' },
-    { href: '/library', icon: Music, label: 'My Library' },
+    { href: '/stations', icon: Radio, label: 'My Stations' },
   ]
   
   return (

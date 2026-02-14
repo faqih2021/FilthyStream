@@ -1,6 +1,6 @@
 'use client'
 
-import { Radio, Music, ListMusic, Plus, Home, User, LogIn } from 'lucide-react'
+import { Radio, Plus, Home, LogIn } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -14,9 +14,7 @@ export function Sidebar() {
   
   const navItems = [
     { href: '/', icon: Home, label: 'Home' },
-    { href: '/stations', icon: Radio, label: 'Stations' },
-    { href: '/playlists', icon: ListMusic, label: 'Playlists' },
-    { href: '/library', icon: Music, label: 'Library' },
+    { href: '/stations', icon: Radio, label: 'My Stations' },
   ]
   
   return (

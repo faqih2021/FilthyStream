@@ -29,32 +29,11 @@ model Station {
 
   // Relations
   queue       QueueItem[]
-  history     PlayHistory[]
 
   @@index([userId])
   @@index([listenKey])
   @@index([playCount(sort: Desc)])
   @@map("stations")
-}
-
-// Playlist - collection of tracks
-model Playlist {
-  id          String   @id @default(uuid()) @db.Uuid
-  name        String   @db.VarChar(100)
-  description String?  @db.Text
-  imageUrl    String?  @map("image_url") @db.Text
-  isPublic    Boolean  @default(false) @map("is_public")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-
-  // Owner - references auth.users from Supabase Auth
-  userId      String   @map("user_id") @db.Uuid
-
-  // Relations
-  tracks      PlaylistTrack[]
-
-  @@index([userId])
-  @@map("playlists")
 }
 
 // Track - individual song/audio
@@ -71,35 +50,14 @@ model Track {
   createdAt   DateTime    @default(now()) @map("created_at")
 
   // Relations
-  playlistTracks   PlaylistTrack[]
-  queueItems       QueueItem[]
-  playHistory      PlayHistory[]
-  savedTracks      SavedTrack[]
-  listeningHistory ListeningHistory[]
+  queueItems  QueueItem[]
 
   @@unique([sourceType, sourceId])
   @@index([sourceType, sourceId])
   @@map("tracks")
 }
 
-// Many-to-many relation between Playlist and Track
-model PlaylistTrack {
-  id         String   @id @default(uuid()) @db.Uuid
-  position   Int
-  addedAt    DateTime @default(now()) @map("added_at")
-
-  playlistId String   @map("playlist_id") @db.Uuid
-  playlist   Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
-
-  trackId    String   @map("track_id") @db.Uuid
-  track      Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
-
-  @@unique([playlistId, trackId])
-  @@index([playlistId])
-  @@map("playlist_tracks")
-}
-
-// Queue for a station
+// Queue/Tracks for a station
 model QueueItem {
   id         String      @id @default(uuid()) @db.Uuid
   position   Int
@@ -117,55 +75,8 @@ model QueueItem {
   @@map("queue_items")
 }
 
-// Play history for a station
-model PlayHistory {
-  id        String   @id @default(uuid()) @db.Uuid
-  playedAt  DateTime @default(now()) @map("played_at")
-  endedAt   DateTime? @map("ended_at")
-
-  stationId String   @map("station_id") @db.Uuid
-  station   Station  @relation(fields: [stationId], references: [id], onDelete: Cascade)
-
-  trackId   String   @map("track_id") @db.Uuid
-  track     Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
-
-  @@index([stationId])
-  @@index([stationId, playedAt])
-  @@map("play_history")
-}
-
-// User's saved tracks (library)
-model SavedTrack {
-  id        String   @id @default(uuid()) @db.Uuid
-  savedAt   DateTime @default(now()) @map("saved_at")
-
-  userId    String   @map("user_id") @db.Uuid
-  trackId   String   @map("track_id") @db.Uuid
-  track     Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, trackId])
-  @@index([userId])
-  @@index([savedAt(sort: Desc)])
-  @@map("saved_tracks")
-}
-
-// User's listening history
-model ListeningHistory {
-  id        String   @id @default(uuid()) @db.Uuid
-  playedAt  DateTime @default(now()) @map("played_at")
-
-  userId    String   @map("user_id") @db.Uuid
-  trackId   String   @map("track_id") @db.Uuid
-  track     Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([userId, playedAt(sort: Desc)])
-  @@map("listening_history")
-}
-
 // Enums
 enum SourceType {
-  SPOTIFY
   YOUTUBE
 }
 

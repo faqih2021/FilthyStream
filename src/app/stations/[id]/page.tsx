@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, use } from 'react'
+import { useState, useEffect, use, useCallback } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import {
@@ -8,21 +8,20 @@ import {
   ArrowLeft,
   Play,
   Pause,
-  SkipForward,
   Share2,
-  Users,
-  Settings,
   Music,
-  ExternalLink,
   Copy,
   Check,
-  Loader2
+  Loader2,
+  Trash2,
+  ExternalLink,
+  Pencil,
+  X
 } from 'lucide-react'
+import { AppLayout } from '@/components/app-layout'
 import { AddTrackForm } from '@/components/add-track-form'
-import { Queue } from '@/components/queue'
 import { usePlayerStore, Track } from '@/store/player-store'
-import { parseUrl } from '@/lib/url-parser'
-import { formatDuration } from '@/lib/url-parser'
+import { parseUrl, formatDuration } from '@/lib/url-parser'
 
 interface StationPageProps {
   params: Promise<{ id: string }>
@@ -35,6 +34,8 @@ export default function StationPage({ params }: StationPageProps) {
   const [copied, setCopied] = useState(false)
   const [streamCopied, setStreamCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [editingName, setEditingName] = useState(false)
+  const [newName, setNewName] = useState('')
   const [station, setStation] = useState<{
     id: string
     name: string
@@ -42,210 +43,145 @@ export default function StationPage({ params }: StationPageProps) {
     imageUrl: string | null
     isLive: boolean
     listenKey: string
+    playCount: number
   } | null>(null)
+  const [stationTracks, setStationTracks] = useState<Array<{
+    id: string
+    position: number
+    status: string
+    track: Track
+  }>>([])
   
   const {
     currentTrack,
     isPlaying,
-    queue,
     setIsPlaying,
-    addToQueue,
     setQueue,
-    playNext,
-    setCurrentStationId
+    playTrack,
+    setCurrentStationId,
+    removeFromQueue
   } = usePlayerStore()
   
+  const fetchStation = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/stations/${id}`)
+      if (!response.ok) throw new Error('Station not found')
+      const data = await response.json()
+      setStation(data.station)
+      setStationTracks(data.station.queue || [])
+      setError(null)
+    } catch (err) {
+      setError('Failed to load station')
+      console.error('Error fetching station:', err)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [id])
+  
   useEffect(() => {
-    const fetchStation = async () => {
-      try {
-        const response = await fetch(`/api/stations/${id}`)
-        if (!response.ok) {
-          throw new Error('Station not found')
-        }
-        const data = await response.json()
-        setStation(data.station)
-        setCurrentStationId(id)
-        
-        // Load queue from database
-        if (data.station.queue && data.station.queue.length > 0) {
-          const dbQueue = data.station.queue.map((item: { id: string; position: number; status: string; track: Track }) => ({
-            id: item.id,
-            position: item.position,
-            status: item.status,
-            track: {
-              id: item.track.id,
-              title: item.track.title,
-              artist: item.track.artist,
-              album: item.track.album,
-              duration: item.track.duration,
-              imageUrl: item.track.imageUrl,
-              sourceType: item.track.sourceType,
-              sourceId: item.track.sourceId,
-              sourceUrl: item.track.sourceUrl
-            }
-          }))
-          setQueue(dbQueue)
-        }
-        
-        setError(null)
-      } catch (err) {
-        setError('Failed to load station')
-        console.error('Error fetching station:', err)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-    
     fetchStation()
+    setCurrentStationId(id)
+    return () => { setCurrentStationId(null) }
+  }, [id, setCurrentStationId, fetchStation])
+  
+  const handlePlayAll = () => {
+    const pending = stationTracks.filter(q => q.status === 'PENDING')
+    if (pending.length === 0) return
     
-    // Cleanup on unmount
-    return () => {
-      setCurrentStationId(null)
-    }
-  }, [id, setCurrentStationId, setQueue])
+    playTrack(pending[0].track)
+    
+    const rest = pending.slice(1).map((item, i) => ({
+      id: item.id,
+      position: i,
+      status: 'PENDING' as const,
+      track: item.track
+    }))
+    setQueue(rest)
+  }
   
   const handleAddTrack = async (url: string) => {
     setIsAddingTrack(true)
-    
     try {
-      // Fetch metadata from API
       const response = await fetch('/api/tracks', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url })
       })
       
-      if (!response.ok) {
-        throw new Error('Failed to fetch track metadata')
-      }
-      
-      const data = await response.json()
-      const trackData = {
-        title: data.track.title,
-        artist: data.track.artist,
-        album: data.track.album,
-        duration: data.track.duration,
-        imageUrl: data.track.imageUrl,
-        sourceType: data.track.sourceType,
-        sourceId: data.track.sourceId,
-        sourceUrl: data.track.sourceUrl
-      }
-      
-      // Save to database
-      const queueResponse = await fetch(`/api/stations/${id}/queue`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ trackData })
-      })
-      
-      if (queueResponse.ok) {
-        const queueData = await queueResponse.json()
-        // Add to local queue with the ID from database
-        addToQueue({
-          id: queueData.queueItem.id,
-          position: queue.length,
-          status: 'PENDING',
-          track: {
-            id: queueData.queueItem.track.id,
-            title: queueData.queueItem.track.title,
-            artist: queueData.queueItem.track.artist,
-            album: queueData.queueItem.track.album,
-            duration: queueData.queueItem.track.duration,
-            imageUrl: queueData.queueItem.track.imageUrl,
-            sourceType: queueData.queueItem.track.sourceType,
-            sourceId: queueData.queueItem.track.sourceId,
-            sourceUrl: queueData.queueItem.track.sourceUrl
-          }
-        })
-      } else {
-        // Fallback to local-only queue
-        const track: Track = {
-          id: crypto.randomUUID(),
-          ...trackData
+      let trackData
+      if (response.ok) {
+        const data = await response.json()
+        trackData = {
+          title: data.track.title,
+          artist: data.track.artist,
+          album: data.track.album,
+          duration: data.track.duration,
+          imageUrl: data.track.imageUrl,
+          sourceType: data.track.sourceType,
+          sourceId: data.track.sourceId,
+          sourceUrl: data.track.sourceUrl
         }
-        addToQueue({
-          id: crypto.randomUUID(),
-          position: queue.length,
-          status: 'PENDING',
-          track
-        })
-      }
-    } catch (error) {
-      // Fallback: create basic track from URL
-      const parsed = parseUrl(url)
-      if (parsed) {
-        const trackData = {
+      } else {
+        const parsed = parseUrl(url)
+        if (!parsed) throw new Error('Invalid URL')
+        trackData = {
           title: 'YouTube Video',
           artist: 'Loading...',
           album: null,
           duration: null,
-          imageUrl: parsed.type === 'YOUTUBE' 
+          imageUrl: parsed.type === 'YOUTUBE'
             ? `https://img.youtube.com/vi/${parsed.id}/mqdefault.jpg`
             : null,
           sourceType: parsed.type,
           sourceId: parsed.id,
           sourceUrl: url
         }
-        
-        // Try to save to database
-        try {
-          const queueResponse = await fetch(`/api/stations/${id}/queue`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ trackData })
-          })
-          
-          if (queueResponse.ok) {
-            const queueData = await queueResponse.json()
-            addToQueue({
-              id: queueData.queueItem.id,
-              position: queue.length,
-              status: 'PENDING',
-              track: {
-                id: queueData.queueItem.track.id,
-                title: queueData.queueItem.track.title,
-                artist: queueData.queueItem.track.artist,
-                album: queueData.queueItem.track.album,
-                duration: queueData.queueItem.track.duration,
-                imageUrl: queueData.queueItem.track.imageUrl,
-                sourceType: queueData.queueItem.track.sourceType,
-                sourceId: queueData.queueItem.track.sourceId,
-                sourceUrl: queueData.queueItem.track.sourceUrl
-              }
-            })
-          } else {
-            const track: Track = {
-              id: crypto.randomUUID(),
-              ...trackData
-            }
-            addToQueue({
-              id: crypto.randomUUID(),
-              position: queue.length,
-              status: 'PENDING',
-              track
-            })
-          }
-        } catch {
-          const track: Track = {
-            id: crypto.randomUUID(),
-            ...trackData
-          }
-          addToQueue({
-            id: crypto.randomUUID(),
-            position: queue.length,
-            status: 'PENDING',
-            track
-          })
-        }
       }
+      
+      const queueResponse = await fetch(`/api/stations/${id}/queue`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trackData })
+      })
+      
+      if (queueResponse.ok) {
+        await fetchStation()
+      }
+    } catch (error) {
+      console.error('Failed to add track:', error)
     } finally {
       setIsAddingTrack(false)
+    }
+  }
+  
+  const handleRemoveTrack = async (queueItemId: string) => {
+    try {
+      await fetch(`/api/stations/${id}/queue`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ queueItemId })
+      })
+      setStationTracks(prev => prev.filter(t => t.id !== queueItemId))
+      removeFromQueue(queueItemId)
+    } catch (error) {
+      console.error('Failed to remove track:', error)
+    }
+  }
+  
+  const handleRenameSave = async () => {
+    if (!newName.trim() || !station) return
+    try {
+      const res = await fetch(`/api/stations/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName.trim() })
+      })
+      if (res.ok) {
+        setStation({ ...station, name: newName.trim() })
+        setEditingName(false)
+      }
+    } catch (error) {
+      console.error('Failed to rename:', error)
     }
   }
   
@@ -256,340 +192,256 @@ export default function StationPage({ params }: StationPageProps) {
   }
   
   const handleCopyStreamUrl = () => {
-    const streamUrl = `${window.location.origin}/api/stream/${station?.listenKey}`
-    navigator.clipboard.writeText(streamUrl)
+    navigator.clipboard.writeText(`${window.location.origin}/api/stream/${station?.listenKey}`)
     setStreamCopied(true)
     setTimeout(() => setStreamCopied(false), 2000)
   }
   
-  // Sync playNext with database
-  const handlePlayNext = async () => {
-    // Update database first
-    try {
-      await fetch(`/api/stations/${id}/queue`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ action: 'play-next' })
-      })
-    } catch (error) {
-      console.error('Failed to sync with database:', error)
-    }
-    
-    // Then update local state
-    playNext()
-  }
-  
-  const pendingTracks = queue.filter(item => item.status === 'PENDING')
+  const pendingTracks = stationTracks.filter(item => item.status === 'PENDING')
   
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[var(--background)] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
-      </div>
+      <AppLayout>
+        <div className="flex items-center justify-center h-full">
+          <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
+        </div>
+      </AppLayout>
     )
   }
   
   if (error || !station) {
     return (
-      <div className="min-h-screen bg-[var(--background)] flex flex-col items-center justify-center gap-4">
-        <Radio className="w-16 h-16 text-gray-500" />
-        <p className="text-xl text-gray-400">{error || 'Station not found'}</p>
-        <Link
-          href="/stations"
-          className="px-4 py-2 bg-purple-500 rounded-lg hover:bg-purple-600 transition-colors"
-        >
-          Browse Stations
-        </Link>
-      </div>
+      <AppLayout>
+        <div className="flex flex-col items-center justify-center h-full gap-4">
+          <Radio className="w-16 h-16 text-gray-500" />
+          <p className="text-xl text-gray-400">{error || 'Station not found'}</p>
+          <Link href="/stations" className="px-4 py-2 bg-purple-500 rounded-lg hover:bg-purple-600 transition-colors">
+            Back to Stations
+          </Link>
+        </div>
+      </AppLayout>
     )
   }
   
   return (
-    <div className="flex h-screen bg-[var(--background)]">
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
-        <header className="border-b border-[var(--border)] bg-[var(--card-bg)] px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Link
-                href="/"
-                className="p-2 rounded-lg hover:bg-white/5 transition-colors"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </Link>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-                  <Radio className="w-6 h-6 text-white" />
-                </div>
-                <span className="text-xl font-bold gradient-text">FilthyStream</span>
+    <AppLayout>
+      <div className="max-w-4xl mx-auto p-8">
+        {/* Back */}
+        <Link href="/stations" className="inline-flex items-center gap-2 text-gray-400 hover:text-white mb-6 transition-colors">
+          <ArrowLeft className="w-4 h-4" />
+          Back to My Stations
+        </Link>
+        
+        {/* Station Header */}
+        <div className="flex items-start gap-6 mb-8">
+          <div className="relative w-40 h-40 rounded-2xl overflow-hidden bg-gradient-to-br from-purple-900 to-pink-900 flex-shrink-0">
+            {station.imageUrl ? (
+              <Image src={station.imageUrl} alt={station.name} fill className="object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <Radio className="w-16 h-16 text-white/50" />
               </div>
-            </div>
+            )}
+            {station.isLive && (
+              <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2 py-1 bg-red-500 text-white text-xs font-bold rounded-full">
+                <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+                LIVE
+              </div>
+            )}
+          </div>
+          
+          <div className="flex-1">
+            {editingName ? (
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  type="text"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  className="bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-2xl font-bold focus:outline-none focus:border-purple-500"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleRenameSave()
+                    if (e.key === 'Escape') setEditingName(false)
+                  }}
+                />
+                <button onClick={handleRenameSave} className="p-2 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30">
+                  <Check className="w-5 h-5" />
+                </button>
+                <button onClick={() => setEditingName(false)} className="p-2 rounded-lg bg-gray-700 text-gray-400 hover:bg-gray-600">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3 mb-2">
+                <h1 className="text-3xl font-bold">{station.name}</h1>
+                <button
+                  onClick={() => { setEditingName(true); setNewName(station.name) }}
+                  className="p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-white/10 transition-colors"
+                  title="Rename station"
+                >
+                  <Pencil className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+            {station.description && <p className="text-gray-400 mb-4">{station.description}</p>}
             
             <div className="flex items-center gap-3">
               <button
-                onClick={handleCopyLink}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-[var(--border)] hover:bg-white/5 transition-colors"
+                onClick={handlePlayAll}
+                disabled={pendingTracks.length === 0}
+                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
               >
-                {copied ? (
-                  <>
-                    <Check className="w-4 h-4 text-green-400" />
-                    <span className="text-green-400">Copied!</span>
-                  </>
-                ) : (
-                  <>
-                    <Share2 className="w-4 h-4" />
-                    Share
-                  </>
-                )}
+                <Play className="w-5 h-5" />
+                Play All ({pendingTracks.length})
               </button>
-              <button className="p-2 rounded-lg hover:bg-white/5 transition-colors">
-                <Settings className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-        </header>
-        
-        {/* Station Info & Content */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="max-w-4xl mx-auto p-8">
-            {/* Station Header */}
-            <div className="flex items-start gap-6 mb-8">
-              <div className="relative w-40 h-40 rounded-2xl overflow-hidden bg-gradient-to-br from-purple-900 to-pink-900 flex-shrink-0">
-                {station?.imageUrl ? (
-                  <Image
-                    src={station.imageUrl}
-                    alt={station.name}
-                    fill
-                    className="object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <Radio className="w-16 h-16 text-white/50" />
-                  </div>
-                )}
-                {station?.isLive && (
-                  <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2 py-1 bg-red-500 text-white text-xs font-bold rounded-full">
-                    <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
-                    LIVE
-                  </div>
-                )}
-              </div>
               
-              <div className="flex-1">
-                <h1 className="text-3xl font-bold mb-2">{station?.name}</h1>
-                <p className="text-gray-400 mb-4">{station?.description}</p>
-                
-                <div className="flex items-center gap-4">
-                  <button
-                    onClick={() => {
-                      if (pendingTracks.length > 0 && !currentTrack) {
-                        handlePlayNext()
-                      }
-                      setIsPlaying(!isPlaying)
-                    }}
-                    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full font-semibold hover:opacity-90 transition-opacity"
-                  >
-                    {isPlaying ? (
-                      <>
-                        <Pause className="w-5 h-5" />
-                        Pause
-                      </>
-                    ) : (
-                      <>
-                        <Play className="w-5 h-5" />
-                        {currentTrack ? 'Resume' : 'Start Playing'}
-                      </>
-                    )}
-                  </button>
-                  
-                  <button
-                    onClick={handlePlayNext}
-                    disabled={pendingTracks.length === 0}
-                    className="flex items-center gap-2 px-4 py-3 border border-[var(--border)] rounded-full font-medium hover:bg-white/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <SkipForward className="w-5 h-5" />
-                    Skip
-                  </button>
-                </div>
-                
-                <div className="flex items-center gap-4 mt-4 text-sm text-gray-400">
-                  <span className="flex items-center gap-1">
-                    <Music className="w-4 h-4" />
-                    {queue.length} tracks
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Users className="w-4 h-4" />
-                    0 listeners
-                  </span>
-                </div>
-              </div>
+              <button
+                onClick={handleCopyLink}
+                className="flex items-center gap-2 px-4 py-3 border border-[var(--border)] rounded-full font-medium hover:bg-white/5 transition-colors"
+              >
+                {copied ? <><Check className="w-4 h-4 text-green-400" /><span className="text-green-400">Copied!</span></> : <><Share2 className="w-4 h-4" />Share</>}
+              </button>
             </div>
             
-            {/* Stream URL */}
-            <div className="bg-[var(--card-bg)] border border-[var(--border)] rounded-2xl p-6 mb-8">
-              <div className="flex items-center gap-2 mb-3">
-                <Radio className="w-5 h-5 text-purple-400" />
-                <h2 className="text-lg font-bold">Radio Stream URL</h2>
-              </div>
-              <p className="text-gray-400 text-sm mb-4">
-                Direct audio stream URL — works in VLC, car radios, and any audio player.
-              </p>
-              <div className="flex items-center gap-2 mb-4">
-                <div className="flex-1 bg-black/30 border border-[var(--border)] rounded-lg px-4 py-3 font-mono text-sm text-gray-300 truncate">
-                  {window.location.origin}/api/stream/{station.listenKey}
-                </div>
-                <button
-                  onClick={handleCopyStreamUrl}
-                  className="flex items-center gap-2 px-4 py-3 bg-purple-500 hover:bg-purple-600 rounded-lg font-medium transition-colors"
-                >
-                  {streamCopied ? (
-                    <>
-                      <Check className="w-4 h-4" />
-                      Copied!
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-4 h-4" />
-                      Copy
-                    </>
-                  )}
-                </button>
-              </div>
-              <p className="text-gray-400 text-sm mb-2">
-                Web player link — share with listeners for the full experience.
-              </p>
-              <div className="flex items-center gap-2">
-                <div className="flex-1 bg-black/30 border border-[var(--border)] rounded-lg px-4 py-3 font-mono text-sm text-gray-300 truncate">
-                  {window.location.origin}/listen/{station.listenKey}
-                </div>
-                <button
-                  onClick={handleCopyLink}
-                  className="flex items-center gap-2 px-4 py-3 bg-white/10 hover:bg-white/20 rounded-lg font-medium transition-colors"
-                >
-                  {copied ? (
-                    <>
-                      <Check className="w-4 h-4" />
-                      Copied!
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-4 h-4" />
-                      Copy
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-            
-            {/* Now Playing */}
-            {currentTrack && (
-              <div className="bg-[var(--card-bg)] border border-[var(--border)] rounded-2xl p-6 mb-8">
-                <p className="text-xs text-purple-400 uppercase font-semibold mb-4">Now Playing</p>
-                <div className="flex items-center gap-4">
-                  <div className="relative w-20 h-20 rounded-lg overflow-hidden bg-gray-800 flex-shrink-0">
-                    {currentTrack.imageUrl ? (
-                      <Image
-                        src={currentTrack.imageUrl}
-                        alt={currentTrack.title}
-                        fill
-                        className={`object-cover ${isPlaying ? 'animate-spin-slow' : ''}`}
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Music className="w-8 h-8 text-gray-500" />
-                      </div>
-                    )}
-                    {isPlaying && (
-                      <div className="absolute inset-0 border-2 border-purple-500 rounded-lg animate-pulse-glow" />
-                    )}
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-xl font-bold">{currentTrack.title}</h3>
-                    <p className="text-gray-400">{currentTrack.artist || 'Unknown Artist'}</p>
-                    <div className="flex items-center gap-2 mt-2">
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/20 text-red-500">
-                        YouTube
-                      </span>
-                      {currentTrack.duration && (
-                        <span className="text-sm text-gray-500">
-                          {formatDuration(currentTrack.duration)}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <a
-                    href={currentTrack.sourceUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="p-2 rounded-lg hover:bg-white/5 transition-colors"
-                  >
-                    <ExternalLink className="w-5 h-5 text-gray-400" />
-                  </a>
-                </div>
-              </div>
-            )}
-            
-            {/* Add Track */}
-            <div className="bg-[var(--card-bg)] border border-[var(--border)] rounded-2xl p-6 mb-8">
-              <h2 className="text-xl font-bold mb-4">Add Track</h2>
-              <p className="text-gray-400 mb-6">
-                Paste a YouTube URL to add it to the queue
-              </p>
-              <AddTrackForm onAddTrack={handleAddTrack} isLoading={isAddingTrack} />
+            <div className="flex items-center gap-4 mt-4 text-sm text-gray-400">
+              <span className="flex items-center gap-1"><Music className="w-4 h-4" />{stationTracks.length} tracks</span>
+              <span className="flex items-center gap-1"><Play className="w-4 h-4" />{station.playCount} plays</span>
             </div>
           </div>
         </div>
         
-        {/* Mini Player */}
-        {currentTrack && (
-          <div className="h-20 bg-[var(--card-bg)] border-t border-[var(--border)] flex items-center px-6">
-            <div className="flex items-center gap-4 flex-1">
-              <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-gray-800">
-                {currentTrack.imageUrl ? (
-                  <Image
-                    src={currentTrack.imageUrl}
-                    alt={currentTrack.title}
-                    fill
-                    className="object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <Music className="w-5 h-5 text-gray-500" />
-                  </div>
-                )}
-              </div>
-              <div>
-                <p className="font-medium truncate">{currentTrack.title}</p>
-                <p className="text-sm text-gray-400 truncate">{currentTrack.artist || 'Unknown'}</p>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => setIsPlaying(!isPlaying)}
-                className="w-10 h-10 rounded-full bg-white flex items-center justify-center"
-              >
-                {isPlaying ? (
-                  <Pause className="w-5 h-5 text-black" />
-                ) : (
-                  <Play className="w-5 h-5 text-black ml-0.5" />
-                )}
-              </button>
-              <button onClick={handlePlayNext} className="text-gray-400 hover:text-white">
-                <SkipForward className="w-5 h-5" />
-              </button>
-            </div>
+        {/* Stream URL */}
+        <div className="bg-[var(--card-bg)] border border-[var(--border)] rounded-2xl p-6 mb-8">
+          <div className="flex items-center gap-2 mb-3">
+            <Radio className="w-5 h-5 text-purple-400" />
+            <h2 className="text-lg font-bold">Radio Stream URL</h2>
           </div>
-        )}
+          <p className="text-gray-400 text-sm mb-4">
+            Direct audio stream — works in VLC, car radios, and any audio player.
+          </p>
+          <div className="flex items-center gap-2 mb-4">
+            <div className="flex-1 bg-black/30 border border-[var(--border)] rounded-lg px-4 py-3 font-mono text-sm text-gray-300 truncate">
+              {typeof window !== 'undefined' ? window.location.origin : ''}/api/stream/{station.listenKey}
+            </div>
+            <button
+              onClick={handleCopyStreamUrl}
+              className="flex items-center gap-2 px-4 py-3 bg-purple-500 hover:bg-purple-600 rounded-lg font-medium transition-colors flex-shrink-0"
+            >
+              {streamCopied ? <><Check className="w-4 h-4" />Copied!</> : <><Copy className="w-4 h-4" />Copy</>}
+            </button>
+          </div>
+          <p className="text-gray-400 text-sm mb-2">Web player link for listeners:</p>
+          <div className="flex items-center gap-2">
+            <div className="flex-1 bg-black/30 border border-[var(--border)] rounded-lg px-4 py-3 font-mono text-sm text-gray-300 truncate">
+              {typeof window !== 'undefined' ? window.location.origin : ''}/listen/{station.listenKey}
+            </div>
+            <button
+              onClick={handleCopyLink}
+              className="flex items-center gap-2 px-4 py-3 bg-white/10 hover:bg-white/20 rounded-lg font-medium transition-colors flex-shrink-0"
+            >
+              {copied ? <><Check className="w-4 h-4" />Copied!</> : <><Copy className="w-4 h-4" />Copy</>}
+            </button>
+          </div>
+        </div>
+        
+        {/* Add Track */}
+        <div className="bg-[var(--card-bg)] border border-[var(--border)] rounded-2xl p-6 mb-8">
+          <h2 className="text-xl font-bold mb-2">Add Track</h2>
+          <p className="text-gray-400 mb-4 text-sm">Paste a YouTube URL to add it to this station</p>
+          <AddTrackForm onAddTrack={handleAddTrack} isLoading={isAddingTrack} />
+        </div>
+        
+        {/* Track List */}
+        <div className="bg-[var(--card-bg)] border border-[var(--border)] rounded-2xl p-6">
+          <h2 className="text-xl font-bold mb-4">Tracks ({stationTracks.length})</h2>
+          
+          {stationTracks.length === 0 ? (
+            <div className="text-center py-12">
+              <Music className="w-12 h-12 text-gray-700 mx-auto mb-3" />
+              <p className="text-gray-400">No tracks yet. Add your first track above!</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {stationTracks.map((item, index) => {
+                const isCurrentlyPlaying = currentTrack?.sourceId === item.track.sourceId
+                return (
+                  <div
+                    key={item.id}
+                    className={`flex items-center gap-4 p-3 rounded-xl transition-colors ${
+                      isCurrentlyPlaying ? 'bg-purple-500/10 border border-purple-500/30' : 'hover:bg-white/5'
+                    }`}
+                  >
+                    <span className="w-8 text-center text-sm text-gray-500 font-mono">
+                      {isCurrentlyPlaying && isPlaying ? (
+                        <span className="flex items-center justify-center gap-0.5">
+                          <span className="w-1 h-3 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                          <span className="w-1 h-4 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                          <span className="w-1 h-3 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                        </span>
+                      ) : (
+                        index + 1
+                      )}
+                    </span>
+                    
+                    <div className="w-10 h-10 rounded-lg bg-gray-800 flex-shrink-0 overflow-hidden">
+                      {item.track.imageUrl ? (
+                        <Image src={item.track.imageUrl} alt={item.track.title} width={40} height={40} className="w-full h-full object-cover" unoptimized />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Music className="w-4 h-4 text-gray-600" />
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="flex-1 min-w-0">
+                      <p className={`font-medium truncate ${isCurrentlyPlaying ? 'text-purple-400' : ''}`}>
+                        {item.track.title}
+                      </p>
+                      <p className="text-sm text-gray-500 truncate">{item.track.artist || 'Unknown Artist'}</p>
+                    </div>
+                    
+                    <span className="text-sm text-gray-500 flex-shrink-0">
+                      {item.track.duration ? formatDuration(item.track.duration) : '--:--'}
+                    </span>
+                    
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button
+                        onClick={() => {
+                          if (isCurrentlyPlaying && isPlaying) {
+                            setIsPlaying(false)
+                          } else {
+                            playTrack(item.track)
+                          }
+                        }}
+                        className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+                        title={isCurrentlyPlaying && isPlaying ? 'Pause' : 'Play'}
+                      >
+                        {isCurrentlyPlaying && isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                      </button>
+                      <a
+                        href={item.track.sourceUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+                        title="Open on YouTube"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                      </a>
+                      <button
+                        onClick={() => handleRemoveTrack(item.id)}
+                        className="p-2 rounded-lg text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                        title="Remove track"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
       </div>
-      
-      {/* Queue Sidebar */}
-      <aside className="w-80 bg-[var(--card-bg)] border-l border-[var(--border)] flex-shrink-0 overflow-hidden">
-        <Queue />
-      </aside>
-    </div>
+    </AppLayout>
   )
 }

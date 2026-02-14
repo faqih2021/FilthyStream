@@ -19,15 +19,6 @@ export async function GET(
           orderBy: {
             position: 'asc'
           }
-        },
-        history: {
-          include: {
-            track: true
-          },
-          orderBy: {
-            playedAt: 'desc'
-          },
-          take: 20
         }
       }
     })

@@ -119,14 +119,6 @@ export async function advanceToNextTrack(stationId: string): Promise<StationPlay
       data: { status: 'PLAYING' }
     })
 
-    // Record in play history
-    await prisma.playHistory.create({
-      data: {
-        stationId,
-        trackId: nextItem.trackId
-      }
-    })
-
     const state: StationPlayState = {
       stationId,
       currentTrackSourceId: nextItem.track.sourceId,

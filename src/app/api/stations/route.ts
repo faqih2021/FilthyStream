@@ -2,47 +2,43 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 
-// Get all public stations
+// Get stations - supports ?mine=true for user's own stations
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
+    const mine = searchParams.get('mine') === 'true'
     const limit = parseInt(searchParams.get('limit') || '20')
     const offset = parseInt(searchParams.get('offset') || '0')
     
+    let where: Record<string, unknown> = { isPublic: true }
+    
+    if (mine) {
+      const currentUser = await getCurrentUser()
+      if (!currentUser) {
+        return NextResponse.json({ stations: [] })
+      }
+      where = { userId: currentUser.userId }
+    }
+    
     const stations = await prisma.station.findMany({
-      where: {
-        isPublic: true
-      },
+      where,
       include: {
         queue: {
-          where: {
-            status: 'PLAYING'
-          },
-          include: {
-            track: true
-          },
-          take: 1
+          include: { track: true },
+          orderBy: { position: 'asc' }
         },
         _count: {
-          select: {
-            queue: {
-              where: {
-                status: 'PENDING'
-              }
-            }
-          }
+          select: { queue: true }
         }
       },
-      orderBy: {
-        createdAt: 'desc'
-      },
+      orderBy: { createdAt: 'desc' },
       take: limit,
       skip: offset
     })
     
     return NextResponse.json({
       stations,
-      total: await prisma.station.count({ where: { isPublic: true } })
+      total: await prisma.station.count({ where })
     })
   } catch (error) {
     console.error('Error fetching stations:', error)

@@ -18,7 +18,7 @@ const LOGO_URL = 'https://sgtxmsbfcpacrsryhcth.supabase.co/storage/v1/object/pub
 
 export const metadata: Metadata = {
   title: "FilthyStream - Radio Stream from YouTube",
-  description: "Create your own radio stream by combining music from YouTube playlists",
+  description: "Create your own radio station and stream music from YouTube",
   icons: {
     icon: LOGO_URL,
     apple: LOGO_URL,

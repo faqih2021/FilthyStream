@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { usePlayerStore } from '@/store/player-store'
 
 declare global {
@@ -42,6 +42,8 @@ interface YTPlayer {
   getCurrentTime: () => number
   getDuration: () => number
   getPlayerState: () => number
+  loadVideoById: (videoId: string) => void
+  cueVideoById: (videoId: string) => void
   destroy: () => void
 }
 
@@ -50,6 +52,8 @@ export function YouTubePlayer() {
   const containerRef = useRef<HTMLDivElement>(null)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const [isPlayerReady, setIsPlayerReady] = useState(false)
+  // Track the last sourceId we loaded to avoid re-loading same video
+  const lastLoadedIdRef = useRef<string | null>(null)
   
   const {
     currentTrack,
@@ -60,6 +64,27 @@ export function YouTubePlayer() {
     setIsPlaying,
     playNext
   } = usePlayerStore()
+  
+  const startTimeTracking = useCallback(() => {
+    if (intervalRef.current) return
+    intervalRef.current = setInterval(() => {
+      if (playerRef.current) {
+        const currentTime = playerRef.current.getCurrentTime()
+        const duration = playerRef.current.getDuration()
+        setCurrentTime(Math.floor(currentTime))
+        if (duration > 0) {
+          setDuration(Math.floor(duration))
+        }
+      }
+    }, 1000)
+  }, [setCurrentTime, setDuration])
+  
+  const stopTimeTracking = useCallback(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current)
+      intervalRef.current = null
+    }
+  }, [])
   
   // Load YouTube IFrame API
   useEffect(() => {
@@ -84,12 +109,12 @@ export function YouTubePlayer() {
         clearInterval(intervalRef.current)
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   
   const initializePlayer = () => {
     if (!containerRef.current || playerRef.current) return
     
-    // Create a placeholder div for the player
     const playerId = 'youtube-player-' + Date.now()
     const playerDiv = document.createElement('div')
     playerDiv.id = playerId
@@ -113,99 +138,62 @@ export function YouTubePlayer() {
       events: {
         onReady: (event) => {
           setIsPlayerReady(true)
-          event.target.setVolume(volume * 100)
+          event.target.setVolume(usePlayerStore.getState().volume * 100)
         },
         onStateChange: (event) => {
           if (event.data === window.YT.PlayerState.ENDED) {
-            // Auto-play next track
-            playNext()
+            stopTimeTracking()
+            usePlayerStore.getState().playNext()
           } else if (event.data === window.YT.PlayerState.PLAYING) {
-            // Sync Zustand store with actual player state
-            const store = usePlayerStore.getState()
-            if (!store.isPlaying) {
-              usePlayerStore.getState().setIsPlaying(true)
-            }
-            // Start time tracking
             startTimeTracking()
           } else if (event.data === window.YT.PlayerState.PAUSED) {
-            // Sync Zustand store with actual player state
-            const store = usePlayerStore.getState()
-            if (store.isPlaying) {
-              usePlayerStore.getState().setIsPlaying(false)
-            }
             stopTimeTracking()
           }
         },
         onError: (event) => {
           console.error('YouTube Player Error:', event.data)
-          // Skip to next track on error
-          playNext()
+          usePlayerStore.getState().playNext()
         }
       }
-    })
+    }) as unknown as YTPlayer
   }
   
-  const startTimeTracking = () => {
-    if (intervalRef.current) return
-    
-    intervalRef.current = setInterval(() => {
-      if (playerRef.current) {
-        const currentTime = playerRef.current.getCurrentTime()
-        const duration = playerRef.current.getDuration()
-        setCurrentTime(Math.floor(currentTime))
-        if (duration > 0) {
-          setDuration(Math.floor(duration))
-        }
-      }
-    }, 1000)
-  }
-  
-  const stopTimeTracking = () => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current)
-      intervalRef.current = null
-    }
-  }
-  
-  // Handle track changes
-  useEffect(() => {
-    if (
-      isPlayerReady &&
-      playerRef.current &&
-      currentTrack?.sourceType === 'YOUTUBE'
-    ) {
-      // Use cueVideoById (does NOT auto-play) to prevent double audio.
-      // The isPlaying effect below will handle actual playback.
-      const player = playerRef.current as unknown as {
-        loadVideoById: (videoId: string) => void
-        cueVideoById: (videoId: string) => void
-      }
-      
-      player.cueVideoById(currentTrack.sourceId)
-      setDuration(currentTrack.duration || 0)
-      
-      // If isPlaying is already true, manually trigger playback after cue
-      if (isPlaying) {
-        // Small delay to let cue complete
-        setTimeout(() => {
-          playerRef.current?.playVideo()
-        }, 100)
-      }
-    }
-  }, [currentTrack?.sourceId, isPlayerReady])
-  
-  // Handle play/pause
+  // Handle track changes - use loadVideoById which auto-plays
   useEffect(() => {
     if (!isPlayerReady || !playerRef.current) return
+    if (!currentTrack || currentTrack.sourceType !== 'YOUTUBE') return
     
-    if (currentTrack?.sourceType === 'YOUTUBE') {
-      if (isPlaying) {
+    // Only load if it's a different video
+    if (lastLoadedIdRef.current === currentTrack.sourceId) return
+    lastLoadedIdRef.current = currentTrack.sourceId
+    
+    // loadVideoById auto-plays the video - this is the ONLY place that starts playback for new tracks
+    playerRef.current.loadVideoById(currentTrack.sourceId)
+    setDuration(currentTrack.duration || 0)
+  }, [currentTrack?.sourceId, isPlayerReady, setDuration, currentTrack?.duration, currentTrack?.sourceType])
+  
+  // Handle play/pause toggle (user clicking play/pause button)
+  useEffect(() => {
+    if (!isPlayerReady || !playerRef.current) return
+    if (!currentTrack || currentTrack.sourceType !== 'YOUTUBE') return
+    
+    // Only act if we've already loaded this video (don't interfere with initial load)
+    if (lastLoadedIdRef.current !== currentTrack.sourceId) return
+    
+    const playerState = playerRef.current.getPlayerState()
+    
+    if (isPlaying) {
+      // Only call playVideo if not already playing
+      if (playerState !== window.YT?.PlayerState?.PLAYING) {
         playerRef.current.playVideo()
-      } else {
+      }
+    } else {
+      // Only call pauseVideo if currently playing
+      if (playerState === window.YT?.PlayerState?.PLAYING) {
         playerRef.current.pauseVideo()
       }
     }
-  }, [isPlaying, isPlayerReady, currentTrack?.sourceType])
+  }, [isPlaying, isPlayerReady, currentTrack?.sourceType, currentTrack?.sourceId])
   
   // Handle volume changes
   useEffect(() => {

@@ -159,14 +159,6 @@ export async function PATCH(
             where: { id: nextItem.id },
             data: { status: 'PLAYING' }
           })
-          
-          // Add to play history
-          await tx.playHistory.create({
-            data: {
-              stationId,
-              trackId: nextItem.trackId
-            }
-          })
         }
       })
       
@@ -235,15 +227,22 @@ export async function DELETE(
   try {
     const { id: stationId } = await params
     const { searchParams } = new URL(request.url)
-    const itemId = searchParams.get('itemId')
     const clearAll = searchParams.get('clearAll')
     
     if (clearAll === 'true') {
       await prisma.queueItem.deleteMany({
         where: { stationId }
       })
-      
       return NextResponse.json({ success: true })
+    }
+    
+    // Support both query param and body
+    let itemId = searchParams.get('itemId')
+    if (!itemId) {
+      try {
+        const body = await request.json()
+        itemId = body.queueItemId || body.itemId
+      } catch {}
     }
     
     if (!itemId) {
