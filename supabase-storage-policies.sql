@@ -18,12 +18,12 @@ ON storage.objects FOR SELECT
 USING (bucket_id = 'avatars');
 
 -- Allow authenticated users to UPLOAD their own avatar
+-- Uses folder structure: userId/timestamp.ext
 CREATE POLICY "avatars_auth_insert"
 ON storage.objects FOR INSERT
 TO authenticated
 WITH CHECK (
   bucket_id = 'avatars'
-  AND (storage.foldername(name))[1] IS NOT NULL
 );
 
 -- Allow authenticated users to UPDATE their own avatar

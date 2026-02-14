@@ -120,9 +120,19 @@ export function YouTubePlayer() {
             // Auto-play next track
             playNext()
           } else if (event.data === window.YT.PlayerState.PLAYING) {
+            // Sync Zustand store with actual player state
+            const store = usePlayerStore.getState()
+            if (!store.isPlaying) {
+              usePlayerStore.getState().setIsPlaying(true)
+            }
             // Start time tracking
             startTimeTracking()
           } else if (event.data === window.YT.PlayerState.PAUSED) {
+            // Sync Zustand store with actual player state
+            const store = usePlayerStore.getState()
+            if (store.isPlaying) {
+              usePlayerStore.getState().setIsPlaying(false)
+            }
             stopTimeTracking()
           }
         },
@@ -164,15 +174,23 @@ export function YouTubePlayer() {
       playerRef.current &&
       currentTrack?.sourceType === 'YOUTUBE'
     ) {
-      // Load and play the new video
-      // Using loadVideoById to switch videos
+      // Use cueVideoById (does NOT auto-play) to prevent double audio.
+      // The isPlaying effect below will handle actual playback.
       const player = playerRef.current as unknown as {
         loadVideoById: (videoId: string) => void
         cueVideoById: (videoId: string) => void
       }
       
-      player.loadVideoById(currentTrack.sourceId)
+      player.cueVideoById(currentTrack.sourceId)
       setDuration(currentTrack.duration || 0)
+      
+      // If isPlaying is already true, manually trigger playback after cue
+      if (isPlaying) {
+        // Small delay to let cue complete
+        setTimeout(() => {
+          playerRef.current?.playVideo()
+        }, 100)
+      }
     }
   }, [currentTrack?.sourceId, isPlayerReady])
   

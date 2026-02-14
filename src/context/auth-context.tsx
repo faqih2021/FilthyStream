@@ -42,23 +42,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshUser = useCallback(async () => {
     try {
-      // Use getSession first (faster, cached) then getUser for fresh data
-      const { data: { session } } = await getSupabase().auth.getSession();
-      if (session?.user) {
-        setUser(mapSupabaseUser(session.user));
-        setLoading(false);
-        // Optionally refresh with getUser in background for freshest data
-        getSupabase().auth.getUser().then(({ data }) => {
-          if (data.user) {
-            setUser(mapSupabaseUser(data.user));
-          }
-        });
+      // Use getUser() directly for fresh data (bypasses cache)
+      const { data: { user: freshUser } } = await getSupabase().auth.getUser();
+      if (freshUser) {
+        setUser(mapSupabaseUser(freshUser));
       } else {
         setUser(null);
-        setLoading(false);
       }
     } catch {
       setUser(null);
+    } finally {
       setLoading(false);
     }
   }, []);

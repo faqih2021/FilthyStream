@@ -421,9 +421,10 @@ export default function LibraryPage() {
                   </div>
                 ) : (
                   playlists.map((playlist) => (
-                    <div
+                    <Link
                       key={playlist.id}
-                      className="bg-[var(--card-bg)] border border-[var(--border)] rounded-xl p-4 hover:bg-white/5 transition-colors group relative"
+                      href={`/library/playlists/${playlist.id}`}
+                      className="bg-[var(--card-bg)] border border-[var(--border)] rounded-xl p-4 hover:bg-white/5 transition-colors group relative block"
                     >
                       <div className="aspect-square rounded-lg bg-gradient-to-br from-purple-600 to-pink-600 mb-4 flex items-center justify-center overflow-hidden">
                         {playlist.imageUrl ? (
@@ -445,6 +446,7 @@ export default function LibraryPage() {
                       {/* Delete button */}
                       <button
                         onClick={(e) => {
+                          e.preventDefault()
                           e.stopPropagation()
                           handleDeletePlaylist(playlist.id)
                         }}
@@ -452,7 +454,7 @@ export default function LibraryPage() {
                       >
                         <Trash2 className="w-4 h-4 text-white" />
                       </button>
-                    </div>
+                    </Link>
                   ))
                 )}
               </div>

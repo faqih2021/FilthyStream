@@ -114,9 +114,9 @@ export default function AccountPage() {
         }
       }
 
-      // Upload new avatar
+      // Upload new avatar (use folder structure: userId/timestamp.ext to satisfy storage policy)
       const fileExt = selectedFile.name.split('.').pop();
-      const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+      const fileName = `${user.id}/${Date.now()}.${fileExt}`;
       
       const { error: uploadError } = await getSupabase().storage
         .from('avatars')
