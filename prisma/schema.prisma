@@ -44,7 +44,7 @@ model Track {
   album       String?     @db.VarChar(255)
   duration    Int?        // Duration in seconds
   imageUrl    String?     @map("image_url") @db.Text
-  sourceType  SourceType  @map("source_type")
+  sourceType  SourceType  @default(YOUTUBE) @map("source_type")
   sourceId    String      @map("source_id") @db.VarChar(255) // YouTube video ID
   sourceUrl   String      @map("source_url") @db.Text // Original URL
   createdAt   DateTime    @default(now()) @map("created_at")
